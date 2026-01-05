@@ -68,3 +68,5 @@ Thumbs.db
 
 /debug-scripts/*.mjs
 /debug-scripts/*.sh
+
+DESIGN_THOUGHTS.md

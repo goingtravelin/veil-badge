@@ -190,6 +190,7 @@ function App() {
           <div className="max-w-2xl mx-auto">
             <SettingsPage
               wallet={wallet}
+              badge={badge}
               loading={walletLoading}
               wasmReady={USE_MOCK_PROVER ? true : wasmReady}
               wasmError={DEMO_MODE || USE_MOCK_PROVER ? null : wasmError}
@@ -308,6 +309,7 @@ function App() {
         return (
           <SettingsPage
             wallet={wallet}
+            badge={badge}
             loading={walletLoading}
             wasmReady={USE_MOCK_PROVER ? true : wasmReady}
             wasmError={USE_MOCK_PROVER ? null : wasmError}

@@ -115,6 +115,7 @@ export interface VeilBadge {
   utxo?: {
     txid: string;
     vout: number;
+    value?: number; // Satoshi value of the UTXO
   };
 
   // Transaction counts

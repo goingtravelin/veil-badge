@@ -6,19 +6,13 @@ import { ProposeTransaction } from '../components/ProposeTransaction';
 import { AcceptProposal } from '../components/AcceptProposal';
 import { extractProposalFromUrl } from '../utils/proposalCodec';
 import { createLogger } from '../utils/logger';
-import type { VeilBadge } from '../types';
-import type { UtxoInfo, Network } from '../application';
-import type { Proposal, ActiveTransaction, B32 } from '../domain/proposal';
+import type { VeilBadge, BadgeWithUtxo } from '../types';
+import type { Proposal, ActiveTransaction } from '../domain/proposal';
 
 const logger = createLogger('TransactionsPage');
 
 interface TransactionsPageProps {
-  myBadge: VeilBadge;
-  myBadgeId: B32;
-  myBadgeUtxo: UtxoInfo;
-  availableUtxos: UtxoInfo[];
-  myAddress: string;
-  network: Network;
+  myBadge: BadgeWithUtxo;
   currentBlock: number;
   signMessage: (message: string) => Promise<string>;
   onBadgeUpdate?: (badge: VeilBadge) => void;
@@ -28,7 +22,6 @@ type View = 'inbox' | 'propose' | 'accept';
 
 export function TransactionsPage({
   myBadge,
-  myBadgeId,
   currentBlock,
   signMessage,
   onBadgeUpdate,
@@ -69,7 +62,7 @@ export function TransactionsPage({
     
     setIncomingProposal(null);
     setView('inbox');
-    onBadgeUpdate?.(myBadge);
+    onBadgeUpdate?.(myBadge.badge);
     
     return activeTx;
   };
@@ -116,14 +109,14 @@ export function TransactionsPage({
         <div className="lg:col-span-2">
           {view === 'inbox' && (
             <TransactionInbox 
-              activeTransactions={myBadge.active_transactions}
+              activeTransactions={myBadge.badge.active_transactions}
               currentBlock={currentBlock}
             />
           )}
 
           {view === 'propose' && (
             <ProposeTransaction
-              myBadgeId={myBadgeId}
+              myBadgeId={myBadge.badge.id}
               currentBlock={currentBlock}
               signMessage={signMessage}
               onProposalCreated={handleProposalCreated}
@@ -133,7 +126,7 @@ export function TransactionsPage({
           {view === 'accept' && incomingProposal && (
             <AcceptProposal
               proposal={incomingProposal}
-              myBadgeId={myBadgeId}
+              myBadgeId={myBadge.badge.id}
               currentBlock={currentBlock}
               signMessage={signMessage}
               onAccept={handleAccept}

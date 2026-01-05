@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import {
   WalletState,
   Network,
@@ -8,6 +8,7 @@ import {
   PubKey,
   Outcome,
   TxType,
+  BadgeWithUtxo,
 } from '../types';
 import { createWalletService, charmsService, createBitcoinService, createProverService, createCryptoService, createStorageService } from '../services';
 import { createLogger } from '../utils/logger';
@@ -55,9 +56,13 @@ export interface UseWalletReturn {
   verifyTransaction: (txid: string) => Promise<VeilBadge | null>;
   verifyCounterpartyBadge: (txid: string, vout: number) => Promise<VeilBadge | null>;
 
-  // State
+  // Badge state - primary way to access your badge
+  myBadge: BadgeWithUtxo | null;
+  
+  // Raw state (for advanced use cases)
   badges: VeilBadge[];
   badgeUtxos: Map<string, UtxoInfo>; 
+  
   error: string | null;
   loading: boolean;
   txStatus: string | null;
@@ -116,6 +121,33 @@ export function useWallet(): UseWalletReturn {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [connectionLoading, setConnectionLoading] = useState<boolean>(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+
+  // Computed: primary badge with its UTXO (always in sync)
+  const myBadge = useMemo<BadgeWithUtxo | null>(() => {
+    const badge = badges[0];
+    if (!badge) return null;
+    
+    // Try to get UTXO from the map first
+    const utxo = badgeUtxos.get(badge.id);
+    if (utxo) {
+      return { badge, utxo };
+    }
+    
+    // Fallback: construct from badge.utxo if available
+    if (badge.utxo) {
+      return {
+        badge,
+        utxo: {
+          txid: badge.utxo.txid,
+          vout: badge.utxo.vout,
+          value: badge.utxo.value ?? 546, // Use stored value or default to Charms dust
+          scriptPubKey: '',
+        },
+      };
+    }
+    
+    return null;
+  }, [badges, badgeUtxos]);
 
   useEffect(() => {
     const persisted = loadPersistedBadges();
@@ -443,6 +475,20 @@ export function useWallet(): UseWalletReturn {
         return updated;
       });
 
+      // Also add the badge UTXO to badgeUtxos map so TransactionsPage works immediately
+      if (newBadge.utxo) {
+        setBadgeUtxos((prev) => {
+          const updated = new Map(prev);
+          updated.set(newBadge.id, {
+            txid: newBadge.utxo!.txid,
+            vout: newBadge.utxo!.vout,
+            value: newBadge.utxo!.value ?? 546, // Use stored value or default
+            scriptPubKey: '', // Not needed for display purposes
+          });
+          return updated;
+        });
+      }
+
       setTxStatus(null);
       setSuccessMessage(`Badge minted! TXID: ${result.data.txid.slice(0, 16)}...`);
       
@@ -574,6 +620,7 @@ export function useWallet(): UseWalletReturn {
     unvouch,
     verifyTransaction,
     verifyCounterpartyBadge,
+    myBadge,
     badges,
     badgeUtxos,
     error,

@@ -10,7 +10,6 @@ interface LoginPageProps {
   wasmReady: boolean;
   wasmError: string | null;
   walletError: string | null;
-  isDemo?: boolean;
 }
 
 export function LoginPage({

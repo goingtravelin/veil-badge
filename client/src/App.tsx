@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Shield,
   Activity,
@@ -14,7 +14,6 @@ import {
 import { useCharmsWasm } from './hooks/useCharmsWasm';
 import { useWallet, getCurrentBlockHeight } from './hooks/useWallet';
 import { WalletFlyout } from './components';
-import { emptyBackingAggregates } from './utils/backing';
 import { WalletState } from './types';
 import { createLogger } from './utils/logger';
 
@@ -28,8 +27,6 @@ import {
   SettingsPage,
 } from './pages';
 
-// Demo mode - defaults to false if not configured
-const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === 'true';
 const USE_MOCK_PROVER = import.meta.env.VITE_USE_MOCK_PROVER === 'true';
 
 type View = 'dashboard' | 'transactions' | 'vouch' | 'network' | 'settings';
@@ -69,8 +66,7 @@ function App() {
     wallet,
     connect,
     disconnect,
-    badges,
-    badgeUtxos,
+    myBadge: walletMyBadge,
     refreshBadges,
     refreshUtxos,
     mintBadge,
@@ -81,64 +77,11 @@ function App() {
     successMessage,
     clearSuccess,
   } = useWallet();
-  
 
-  const demoBadge = useMemo(() => {
-    if (!DEMO_MODE || badges.length > 0) return null;
-
-    return {
-      id: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f60001',
-      created_at: 800000,
-      pubkey: '02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
-      tx_total: 47,
-      tx_positive: 45,
-      tx_negative: 2,
-      volume_total: 15_000_000,
-      volume_sum_squares: BigInt('10000000000000000'),
-      window_tx_count: 8,
-      window_volume: 2_500_000,
-      window_start: 855000,
-      counterparty_count: 23,
-      backing: emptyBackingAggregates(),
-      vouches_out: [
-        { badge_id: 'b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3', stake_percent: 25, created_at: 850000, unlock_at: 860000 },
-        { badge_id: 'c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4', stake_percent: 15, created_at: 852000, unlock_at: 870000 },
-      ],
-      vouches_in: [
-        { badge_id: 'd4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5', stake_percent: 30, created_at: 848000, unlock_at: 865000 },
-        { badge_id: 'e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6', stake_percent: 20, created_at: 849000, unlock_at: 868000 },
-        { badge_id: 'f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1', stake_percent: 10, created_at: 851000, unlock_at: 872000 },
-      ],
-      cascade_damage: 3,
-      trust: 72,
-      risk: 20,
-      flags: {
-        acceleration: false,
-        extraction: false,
-        isolated: false,
-        too_clean: false,
-        erratic: false,
-        new_badge: false,
-      },
-      // Transaction flow fields
-      active_transactions: [],
-      reporting_transactions: [],
-      outcomes: {
-        mutualPositive: 12,
-        mutualNegative: 1,
-        contestedIPositive: 2,
-        contestedINegative: 1,
-        timeout: 0,
-        mutualTimeout: 0,
-      },
-      last_nonce: '0000000000000000000000000000000000000000000000000000000000000001',
-      last_update: 856000,
-    };
-  }, [badges.length]);
-
-  const badge = badges[0] || demoBadge || undefined;
-  const hasBadge = badges.length > 0 || (DEMO_MODE && demoBadge !== null);
-  const isDemo = DEMO_MODE && badges.length === 0;
+  // Badge derived from wallet
+  const myBadge = walletMyBadge;
+  const badge = myBadge?.badge;
+  const hasBadge = myBadge !== null;
   
   // Fetch block height
   useEffect(() => {
@@ -164,16 +107,15 @@ function App() {
   }, [wallet.connected, refreshBadges]);
 
   useEffect(() => {
-    if (wallet.connected && !hasBadge && !isDemo && view !== 'dashboard') {
+    if (wallet.connected && !hasBadge && view !== 'dashboard') {
       setView('dashboard');
     }
-  }, [wallet.connected, hasBadge, isDemo, view]);
+  }, [wallet.connected, hasBadge, view]);
 
   // Handlers
   const handleConnect = useCallback(async () => {
-
-    // Only init WASM if not using mock prover and not in demo mode
-    if (!DEMO_MODE && !USE_MOCK_PROVER && !wasmReady) {
+    // Only init WASM if not using mock prover
+    if (!USE_MOCK_PROVER && !wasmReady) {
       await initWasm();
     }
 
@@ -193,7 +135,7 @@ function App() {
               badge={badge}
               loading={walletLoading}
               wasmReady={USE_MOCK_PROVER ? true : wasmReady}
-              wasmError={DEMO_MODE || USE_MOCK_PROVER ? null : wasmError}
+              wasmError={USE_MOCK_PROVER ? null : wasmError}
               onConnect={handleConnect}
               onDisconnect={disconnect}
               onBack={() => setView('dashboard')}
@@ -210,9 +152,8 @@ function App() {
         onGoToSettings={() => setView('settings')}
         loading={walletLoading}
         wasmReady={USE_MOCK_PROVER ? true : wasmReady}
-        wasmError={DEMO_MODE || USE_MOCK_PROVER ? null : wasmError}
-        walletError={DEMO_MODE ? null : walletError}
-        isDemo={DEMO_MODE}
+        wasmError={USE_MOCK_PROVER ? null : wasmError}
+        walletError={walletError}
       />
     );
   }
@@ -227,13 +168,12 @@ function App() {
             badge={badge}
             currentBlock={currentBlock}
             loading={walletLoading}
-            isDemo={isDemo}
             onMintBadge={mintBadge}
             onConnect={handleConnect}
           />
         );
       case 'transactions': {
-        if (!badge) {
+        if (!myBadge) {
           return (
             <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-purple-600/20 flex items-center justify-center">
@@ -253,47 +193,11 @@ function App() {
           );
         }
         
-        // Get the UTXO for this badge, or create a mock one for demo mode
-        const myBadgeUtxo = badgeUtxos.get(badge.id) || (DEMO_MODE ? {
-          txid: '0000000000000000000000000000000000000000000000000000000000000001',
-          vout: 0,
-          value: 10000,
-          scriptPubKey: '',
-        } : undefined);
-        
-        if (!myBadgeUtxo) {
-          logger.warn('[App] No UTXO found for badge', badge.id);
-          return (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl p-8 text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-yellow-600/20 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-yellow-400 animate-spin" />
-              </div>
-              <h3 className="text-xl font-semibold text-white mb-2">Loading Badge Data</h3>
-              <p className="text-gray-400 mb-4">
-                Looking for your badge's UTXO on the blockchain...
-              </p>
-              <button
-                onClick={() => refreshBadges()}
-                className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors"
-              >
-                Refresh
-              </button>
-            </div>
-          );
-        }
-        
         return (
           <TransactionsPage
-            myBadge={badge}
-            myBadgeId={badge.id}
-            myBadgeUtxo={myBadgeUtxo}
-            availableUtxos={wallet.utxos}
-            myAddress={wallet.address || ''}
-            network={wallet.network}
+            myBadge={myBadge}
             currentBlock={currentBlock}
-            signMessage={DEMO_MODE ? async (_message: string) => {
-              return '0'.repeat(128); // Mock 64-byte signature for demo
-            } : signMessage}
+            signMessage={signMessage}
             onBadgeUpdate={(updatedBadge) => {
               logger.debug('[App] Badge updated:', updatedBadge.id);
               refreshBadges();
@@ -334,7 +238,6 @@ function App() {
         wallet={wallet}
         walletLoading={walletLoading}
         hasBadge={hasBadge}
-        isDemo={isDemo}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
         onConnect={handleConnect}
@@ -343,16 +246,6 @@ function App() {
       
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
-        {/* Demo Banner */}
-        {isDemo && (
-          <div className="mb-6 p-4 bg-yellow-900/30 border border-yellow-700 rounded-xl text-yellow-300 flex items-center gap-3">
-            <span className="text-2xl"></span>
-            <div>
-              <strong>Demo Mode</strong>
-            </div>
-          </div>
-        )}
-        
         {/* Error Banner */}
         {walletError && !wallet.connected && (
           <div className="mb-6 p-4 bg-red-900/30 border border-red-700 rounded-xl text-red-400">
@@ -405,7 +298,6 @@ interface HeaderProps {
   wallet: WalletState;
   walletLoading: boolean;
   hasBadge: boolean;
-  isDemo: boolean;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
   onConnect: () => Promise<void>;
@@ -419,7 +311,6 @@ function Header({
   wallet,
   walletLoading,
   hasBadge,
-  isDemo,
   mobileMenuOpen,
   setMobileMenuOpen,
   onConnect,
@@ -457,7 +348,7 @@ function Header({
         
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
-          {(hasBadge || isDemo) && NAV_ITEMS.map(({ id, icon: Icon, label }) => (
+          {hasBadge && NAV_ITEMS.map(({ id, icon: Icon, label }) => (
             <button
               key={id}
               onClick={() => setView(id)}
@@ -467,7 +358,7 @@ function Header({
               <span className="text-sm font-medium">{label}</span>
             </button>
           ))}
-          {!hasBadge && !isDemo && (
+          {!hasBadge && (
             <div className="text-sm text-gray-500 px-4">
               Mint a badge to unlock all features
             </div>
@@ -534,7 +425,7 @@ function Header({
       {/* Mobile menu */}
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-gray-800 bg-gray-900 p-4">
-          {(hasBadge || isDemo) ? (
+          {hasBadge ? (
             <div className="flex flex-col gap-1">
               {NAV_ITEMS.map(({ id, icon: Icon, label }) => (
                 <button

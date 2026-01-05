@@ -113,5 +113,12 @@ export interface UtxoInfo {
   txid: string;
   vout: number;
   value: number;
+  scriptPubKey?: string;
   badge?: VeilBadge;
+}
+
+/** Badge with its associated UTXO - the primary type for working with badges */
+export interface BadgeWithUtxo {
+  badge: VeilBadge;
+  utxo: UtxoInfo;
 }

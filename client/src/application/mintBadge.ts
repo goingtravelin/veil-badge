@@ -519,6 +519,7 @@ export async function mintBadge(
     newBadge.utxo = {
       txid: spellTxid,
       vout: 0, // Badge is always at output 0 in spell tx
+      value: CONSTANTS.DUST_LIMIT_SATS, // Store the actual value for localStorage persistence
     };
     
     // Note: Badge persistence is handled by the calling code (useWallet hook)

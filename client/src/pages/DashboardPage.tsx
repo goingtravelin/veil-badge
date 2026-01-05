@@ -9,7 +9,6 @@ interface DashboardPageProps {
   badge?: VeilBadge;
   currentBlock: number;
   loading: boolean;
-  isDemo: boolean;
   onMintBadge: () => Promise<string>;
   onConnect: () => Promise<void>;
 }
@@ -19,13 +18,12 @@ export function DashboardPage({
   badge,
   currentBlock,
   loading,
-  isDemo,
   onMintBadge,
 }: DashboardPageProps) {
-  const hasBadge = badge !== undefined && !isDemo;
+  const hasBadge = badge !== undefined;
 
   // No badge - show onboarding
-  if (!hasBadge && !isDemo) {
+  if (!hasBadge) {
     return <OnboardingView 
       wallet={wallet}
       loading={loading}

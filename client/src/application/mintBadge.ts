@@ -140,7 +140,7 @@ export async function mintBadge(
     // ========================================================================
     progress('Validating inputs...');
     
-    const mintValidation = validateMint(input.pubkey, ''); // Genesis will be selected
+    const mintValidation = validateMint(input.address, input.pubkey);
     if (!mintValidation.valid) {
       return {
         success: false,

@@ -1,5 +1,4 @@
 
-
 import { useState, useCallback, useEffect } from 'react';
 import {
   WalletState,
@@ -10,10 +9,12 @@ import {
   Outcome,
   TxType,
 } from '../types';
-import { createWalletService, charmsService, createBitcoinService } from '../services';
+import { createWalletService, charmsService, createBitcoinService, createProverService, createCryptoService, createStorageService } from '../services';
 import { createLogger } from '../utils/logger';
 import { VEIL_APP_VK, VEIL_APP_IDENTITY } from '../domain';
 import { hasSeedPhrase, getSeedPhrase, generateTaprootKeysForIndex, signMessageWithSeedPhrase } from '../services/TaprootKeyService';
+import { mintBadge as mintBadgeUseCase } from '../application/mintBadge';
+import { UseCaseContext } from '../application/ports';
 
 const logger = createLogger('useWallet');
 
@@ -401,7 +402,58 @@ export function useWallet(): UseWalletReturn {
       throw new Error('Wallet not connected');
     }
 
-    throw new Error('Not implemented');
+    setTxStatus('Starting badge mint...');
+    setError(null);
+
+    try {
+      // Create use case context with all required services
+      const bitcoinService = createBitcoinService('mempool');
+      const proverService = createProverService();
+      const cryptoService = createCryptoService();
+      const storageService = createStorageService();
+      const walletService = createWalletService();
+
+      const ctx: UseCaseContext = {
+        bitcoin: bitcoinService,
+        prover: proverService,
+        crypto: cryptoService,
+        storage: storageService,
+        wallet: walletService,
+        network: wallet.network,
+        onProgress: (message: string) => {
+          logger.info('[Mint]', message);
+          setTxStatus(message);
+        },
+      };
+
+      const result = await mintBadgeUseCase(
+        { address: wallet.address, pubkey: wallet.pubkey },
+        ctx
+      );
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Mint failed');
+      }
+
+      // Add the new badge to state
+      const newBadge = result.data.badge;
+      setBadges((prev) => {
+        const updated = [...prev, newBadge];
+        persistBadges(updated);
+        return updated;
+      });
+
+      setTxStatus(null);
+      setSuccessMessage(`Badge minted! TXID: ${result.data.txid.slice(0, 16)}...`);
+      
+      return result.data.txid;
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+      logger.error('[Mint] Failed:', errorMsg);
+      setError(errorMsg);
+      setTxStatus(null);
+      throw err;
+    }
   }, [wallet]);
 
   const recordTransaction = useCallback(

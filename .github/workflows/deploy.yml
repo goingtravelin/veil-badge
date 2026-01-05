@@ -1,0 +1,49 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # Allow manual trigger
+
+permissions:
+  contents: write # Required for gh-pages deployment
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Build application
+        working-directory: client
+        run: npm run build
+        env:
+          # Override prover endpoint from GitHub secrets
+          # Set this in: Settings > Secrets and variables > Actions > Repository secrets
+          VITE_PROVER_ENDPOINT: ${{ secrets.VITE_PROVER_ENDPOINT || 'https://v8.charms.dev/spells/prove' }}
+          VITE_USE_MOCK_PROVER: false
+
+      - name: Verify WASM files exist
+        working-directory: client
+        run: |
+          echo "Checking for WASM files in dist/wasm/..."
+          ls -lh dist/wasm/*.wasm || exit 1
+          echo "WASM files found!"
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./client/dist
+          force_orphan: true

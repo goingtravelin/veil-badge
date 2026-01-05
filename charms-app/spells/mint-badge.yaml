@@ -1,0 +1,54 @@
+version: 8
+
+apps:
+  $00: "n/${app_id}/${app_vk}"
+
+ins:
+  - utxo_id: "${in_utxo_0}"
+    charms: {} # No charms on input (fresh mint)
+
+outs:
+  - address: "${addr_0}"
+    sats: 546 # Dust limit for NFT
+    charms:
+      $00:
+        id: "${app_id}"
+        created_at: ${current_block}
+        pubkey: "${owner_pubkey}"
+        tx_total: 0
+        tx_positive: 0
+        tx_negative: 0
+        volume_total: 0
+        volume_sum_squares: 0
+        window_tx_count: 0
+        window_volume: 0
+        window_start: ${current_block}
+        counterparty_count: 0
+        backing:
+          backed_count: 0
+          unbacked_count: 0
+          backed_volume: 0
+          unbacked_volume: 0
+        vouches_out: []
+        vouches_in: []
+        cascade_damage: 0
+        active_transactions: []
+        reporting_transactions: []
+        outcomes:
+          mutual_positive: 0
+          mutual_negative: 0
+          contested_i_positive: 0
+          contested_i_negative: 0
+          timeout: 0
+          mutual_timeout: 0
+        trust: 15
+        risk: 35
+        flags: 36
+        last_nonce: "0000000000000000000000000000000000000000000000000000000000000000"
+        last_update: ${current_block}
+
+public_args:
+  $00:
+    Mint:
+      pubkey: "${owner_pubkey}"
+      current_block: ${current_block}

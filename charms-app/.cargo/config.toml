@@ -1,0 +1,13 @@
+[target.wasm32-wasip1]
+rustflags = [
+    "-C", "target-cpu=generic",
+    # Link-time optimization to strip unused code
+    "-C", "lto=fat",
+    # Don't include debuginfo
+    "-C", "debuginfo=0",
+]
+
+[build]
+# Use sparse protocol for faster downloads
+[registries.crates-io]
+protocol = "sparse"

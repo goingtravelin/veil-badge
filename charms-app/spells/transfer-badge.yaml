@@ -1,0 +1,15 @@
+version: 8
+
+apps:
+  $00: "n/${app_id}/${app_vk}"
+
+ins:
+  - utxo_id: "${source_txid}:${vout}"
+    charms:
+      $00: ${nft_data}
+
+outs:
+  - address: "${addr_0}"
+    sats: 546
+    charms:
+      $00: ${nft_data}

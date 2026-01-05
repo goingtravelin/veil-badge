@@ -1,0 +1,1 @@
+charms_sdk::main!(veil::app_contract);

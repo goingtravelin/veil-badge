@@ -1,0 +1,58 @@
+version: 8
+
+apps:
+  $00: "n/${app_id}/${app_vk}"
+
+ins:
+  - utxo_id: "${badge_utxo}"
+    charms:
+      $00: ${old_badge_state}
+
+outs:
+  - address: "${addr_0}"
+    sats: 546
+    charms:
+      $00:
+        id: "${badge_id}"
+        created_at: ${created_at}
+        pubkey: "${owner_pubkey}"
+        tx_total: ${tx_total}
+        tx_positive: ${tx_positive}
+        tx_negative: ${tx_negative}
+        volume_total: ${volume_total}
+        volume_sum_squares: ${volume_sum_squares}
+        window_tx_count: ${window_tx_count}
+        window_volume: ${window_volume}
+        window_start: ${window_start}
+        counterparty_count: ${counterparty_count}
+        backing: ${backing}
+        vouches_out: ${vouches_out}
+        vouches_in: ${vouches_in}
+        cascade_damage: ${cascade_damage}
+        active_transactions: ${active_transactions}
+        reporting_transactions: ${new_reporting_txs}
+        outcomes: ${new_outcomes}
+        trust: ${trust}
+        risk: ${risk}
+        flags: ${flags}
+        last_nonce: "${last_nonce}"
+        last_update: ${current_block}
+
+public_args:
+  $00:
+    ReportOutcome:
+      transaction_id: "${tx_id}"
+      outcome: "${my_outcome}"
+      current_block: ${current_block}
+
+private_args:
+  $00:
+    transaction_data:
+      id: "${tx_id}"
+      value: ${tx_value}
+      category: "${tx_category}"
+      report_deadline: ${tx_report_deadline}
+    # In a real implementation, you might include:
+    # - Proof of delivery (hash)
+    # - Dispute evidence (if negative)
+    # - Timestamps

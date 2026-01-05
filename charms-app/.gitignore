@@ -1,0 +1,27 @@
+# Rust build artifacts
+/target/
+Cargo.lock
+
+# Rust backup files
+**/*.rs.bk
+
+# Flycheck (Emacs/Rust)
+/flycheck*/
+
+# Debug symbols
+*.pdb
+
+# IDE/Editor directories
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS files
+Thumbs.db
+
+# Test coverage
+*.profraw
+*.profdata

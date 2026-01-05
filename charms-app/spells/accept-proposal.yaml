@@ -1,0 +1,115 @@
+version: 8
+
+apps:
+  $00: "n/${proposer_app_id}/${app_vk}"
+  $01: "n/${acceptor_app_id}/${app_vk}"
+
+ins:
+  # Input 0: Proposer's current badge
+  - utxo_id: "${proposer_utxo}"
+    charms:
+      $00: ${proposer_old_state}
+
+  # Input 1: Acceptor's current badge
+  - utxo_id: "${acceptor_utxo}"
+    charms:
+      $01: ${acceptor_old_state}
+
+outs:
+  # Output 0: Updated proposer badge with new active transaction
+  - address: "${proposer_addr}"
+    sats: 546
+    charms:
+      $00:
+        id: "${proposer_badge_id}"
+        created_at: ${proposer_created_at}
+        pubkey: "${proposer_pubkey}"
+        tx_total: ${proposer_tx_total}
+        tx_positive: ${proposer_tx_positive}
+        tx_negative: ${proposer_tx_negative}
+        volume_total: ${proposer_volume_total}
+        volume_sum_squares: ${proposer_volume_sum_squares}
+        window_tx_count: ${proposer_window_tx_count}
+        window_volume: ${proposer_window_volume}
+        window_start: ${proposer_window_start}
+        counterparty_count: ${proposer_counterparty_count}
+        backing: ${proposer_backing}
+        vouches_out: ${proposer_vouches_out}
+        vouches_in: ${proposer_vouches_in}
+        cascade_damage: ${proposer_cascade_damage}
+        active_transactions: ${proposer_new_active_txs}
+        reporting_transactions: ${proposer_reporting_txs}
+        outcomes: ${proposer_outcomes}
+        trust: ${proposer_trust}
+        risk: ${proposer_risk}
+        flags: ${proposer_flags}
+        last_nonce: "${proposer_last_nonce}"
+        last_update: ${current_block}
+
+  # Output 1: Updated acceptor badge with new active transaction
+  - address: "${acceptor_addr}"
+    sats: 546
+    charms:
+      $01:
+        id: "${acceptor_badge_id}"
+        created_at: ${acceptor_created_at}
+        pubkey: "${acceptor_pubkey}"
+        tx_total: ${acceptor_tx_total}
+        tx_positive: ${acceptor_tx_positive}
+        tx_negative: ${acceptor_tx_negative}
+        volume_total: ${acceptor_volume_total}
+        volume_sum_squares: ${acceptor_volume_sum_squares}
+        window_tx_count: ${acceptor_window_tx_count}
+        window_volume: ${acceptor_window_volume}
+        window_start: ${acceptor_window_start}
+        counterparty_count: ${acceptor_counterparty_count}
+        backing: ${acceptor_backing}
+        vouches_out: ${acceptor_vouches_out}
+        vouches_in: ${acceptor_vouches_in}
+        cascade_damage: ${acceptor_cascade_damage}
+        active_transactions: ${acceptor_new_active_txs}
+        reporting_transactions: ${acceptor_reporting_txs}
+        outcomes: ${acceptor_outcomes}
+        trust: ${acceptor_trust}
+        risk: ${acceptor_risk}
+        flags: ${acceptor_flags}
+        last_nonce: "${acceptor_last_nonce}"
+        last_update: ${current_block}
+
+public_args:
+  # Proposer badge action
+  $00:
+    AcceptProposalAsProposer:
+      proposal_id: "${proposal_id}"
+      acceptor_badge_id: "${acceptor_badge_id}"
+      current_block: ${current_block}
+
+  # Acceptor badge action
+  $01:
+    AcceptProposalAsAcceptor:
+      proposal_id: "${proposal_id}"
+      proposer_badge_id: "${proposer_badge_id}"
+      current_block: ${current_block}
+
+private_args:
+  # Proposer private data
+  $00:
+    proposal_data:
+      id: "${proposal_id}"
+      value: ${proposal_value}
+      category: "${proposal_category}"
+      window_blocks: ${window_blocks}
+      report_window_blocks: ${report_window_blocks}
+    proposer_signature: "${proposer_signature}"
+    acceptor_signature: "${acceptor_signature}"
+
+  # Acceptor private data
+  $01:
+    proposal_data:
+      id: "${proposal_id}"
+      value: ${proposal_value}
+      category: "${proposal_category}"
+      window_blocks: ${window_blocks}
+      report_window_blocks: ${report_window_blocks}
+    proposer_signature: "${proposer_signature}"
+    acceptor_signature: "${acceptor_signature}"

@@ -1,6 +1,6 @@
 
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WalletState } from '../types';
 
 interface WalletFlyoutProps {
@@ -11,6 +11,34 @@ interface WalletFlyoutProps {
 
 export function WalletFlyout({ wallet, onDisconnect, onClose }: WalletFlyoutProps) {
   const flyoutRef = useRef<HTMLDivElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  const copyAddress = async () => {
+    if (wallet.address) {
+      try {
+        // Modern clipboard API (works on most mobile browsers)
+        await navigator.clipboard.writeText(wallet.address);
+        setCopied(true);
+      } catch {
+        // Fallback for older browsers/mobile
+        const textArea = document.createElement('textarea');
+        textArea.value = wallet.address;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-9999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setCopied(true);
+        } catch {
+          console.error('Failed to copy address');
+        }
+        document.body.removeChild(textArea);
+      }
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Close on click outside
   useEffect(() => {
@@ -65,9 +93,26 @@ export function WalletFlyout({ wallet, onDisconnect, onClose }: WalletFlyoutProp
         </WalletInfoRow>
 
         <WalletInfoRow label="Address">
-          <code className="text-purple-400 text-xs font-mono">
-            {wallet.address?.slice(0, 12)}...{wallet.address?.slice(-8)}
-          </code>
+          <div className="flex items-center gap-2">
+            <code className="text-purple-400 text-xs font-mono">
+              {wallet.address?.slice(0, 12)}...{wallet.address?.slice(-8)}
+            </code>
+            <button
+              onClick={copyAddress}
+              className="p-1 hover:bg-gray-700 rounded transition-colors"
+              title="Copy address"
+            >
+              {copied ? (
+                <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4 text-gray-400 hover:text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              )}
+            </button>
+          </div>
         </WalletInfoRow>
 
         <WalletInfoRow label="Public Key">

@@ -28,7 +28,7 @@ veil-badge/
 │   │   ├── hooks/       # Wallet integration, WASM loading
 │   │   └── services/    # Prover, Charms service
 │   └── public/charms/   # Compiled WASM binary
-└── docs/           # Future enhancements
+
 ```
 
 ## Quick Start

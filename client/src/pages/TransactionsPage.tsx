@@ -26,7 +26,7 @@ export function TransactionsPage({
   signMessage,
   onBadgeUpdate,
 }: TransactionsPageProps) {
-  const [view, setView] = useState<View>('inbox');
+  const [view, setView] = useState<View>('propose');
   const [incomingProposal, setIncomingProposal] = useState<Proposal | null>(null);
 
   // Check URL for incoming proposal on mount
@@ -80,17 +80,6 @@ export function TransactionsPage({
         
         <div className="flex gap-2">
           <button
-            onClick={() => setView('inbox')}
-            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
-              view === 'inbox'
-                ? 'bg-purple-600 text-white'
-                : 'bg-gray-800 text-gray-400 hover:text-white'
-            }`}
-          >
-            <Inbox className="w-4 h-4" />
-            Inbox
-          </button>
-          <button
             onClick={() => setView('propose')}
             className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
               view === 'propose'
@@ -100,6 +89,17 @@ export function TransactionsPage({
           >
             <Plus className="w-4 h-4" />
             Propose
+          </button>
+          <button
+            onClick={() => setView('inbox')}
+            className={`px-4 py-2 rounded-lg flex items-center gap-2 transition-colors ${
+              view === 'inbox'
+                ? 'bg-purple-600 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            <Inbox className="w-4 h-4" />
+            Inbox
           </button>
         </div>
       </div>

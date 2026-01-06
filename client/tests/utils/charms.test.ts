@@ -85,7 +85,7 @@ describe('extractVeilBadge', () => {
     it('should extract badge when charm data is a Map (WASM output format)', () => {
       // WASM returns badge data as Map(24) not a plain object
       const spell = createMockSpell();
-      const badgeData = createValidBadgeData();
+      const badgeData = createValidBadgeData({ volume_sum_squares: 1234567 });
       
       // Create a Map from the badge data entries (simulating WASM output)
       const badgeAsMap = new Map(Object.entries(badgeData));
@@ -95,7 +95,8 @@ describe('extractVeilBadge', () => {
 
       expect(badge).not.toBeNull();
       expect(badge?.id).toBe('a'.repeat(64));
-      expect(badge?.volume).toBe(100);
+      // volume_sum_squares should be converted to BigInt
+      expect(badge?.volume_sum_squares).toBe(BigInt(1234567));
     });
 
     it('should convert volume_sum_squares number to BigInt', () => {

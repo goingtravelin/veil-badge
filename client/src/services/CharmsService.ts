@@ -146,7 +146,8 @@ export class WasmCharmsService implements ICharmsService {
 
     try {
       logger.debug('[extractSpell] Attempting extraction, txHex length:', txHex.length, 'first 20 chars:', txHex.slice(0, 20));
-      const result = wasmBindings.extractAndVerifySpell(txHex, mock);
+      // WASM expects a tagged union object: { bitcoin: txHex } for Bitcoin transactions
+      const result = wasmBindings.extractAndVerifySpell({ bitcoin: txHex }, mock);
       logger.debug('[extractSpell] Result:', result ? 'spell found' : 'null');
       return result as ParsedSpell;
     } catch (error) {

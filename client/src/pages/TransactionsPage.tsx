@@ -8,6 +8,9 @@ import { extractProposalFromUrl } from '../utils/proposalCodec';
 import { createLogger } from '../utils/logger';
 import type { VeilBadge, BadgeWithUtxo } from '../types';
 import type { Proposal, ActiveTransaction } from '../domain/proposal';
+import { acceptProposal } from '../application/acceptProposal';
+import { useWallet } from '../hooks/useWallet';
+import { useCharmsWasm } from '../hooks/useCharmsWasm';
 
 const logger = createLogger('TransactionsPage');
 
@@ -28,6 +31,11 @@ export function TransactionsPage({
 }: TransactionsPageProps) {
   const [view, setView] = useState<View>('propose');
   const [incomingProposal, setIncomingProposal] = useState<Proposal | null>(null);
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  // Get wallet context for UTXOs and ports
+  const { address, utxos, network, bitcoin, crypto, storage } = useWallet();
+  const { prover } = useCharmsWasm();
 
   // Check URL for incoming proposal on mount
   useEffect(() => {
@@ -45,26 +53,50 @@ export function TransactionsPage({
     logger.info('Proposal created:', proposal.id);
   };
 
-  const handleAccept = async (proposal: Proposal, _signature: string): Promise<ActiveTransaction> => {
+  const handleAccept = async (proposal: Proposal, signature: string): Promise<ActiveTransaction> => {
     logger.info('Accepting proposal:', proposal.id);
     
-    // Create the active transaction
-    const activeTx: ActiveTransaction = {
-      id: proposal.id,
-      counterpartyBadgeId: proposal.proposerBadgeId,
-      value: proposal.value,
-      category: proposal.category,
-      startedAt: currentBlock,
-      windowEndsAt: currentBlock + proposal.windowBlocks,
-      reportDeadline: currentBlock + proposal.windowBlocks + proposal.reportWindowBlocks,
-      iAmProposer: false,
-    };
+    setIsAccepting(true);
     
-    setIncomingProposal(null);
-    setView('inbox');
-    onBadgeUpdate?.(myBadge.badge);
-    
-    return activeTx;
+    try {
+      // Call the actual acceptProposal use case
+      const result = await acceptProposal(
+        {
+          proposal,
+          myBadge: myBadge.badge,
+          myBadgeUtxo: myBadge.utxo,
+          availableUtxos: utxos,
+          myAddress: address!,
+          mySignature: signature,
+          network,
+        },
+        {
+          bitcoin: bitcoin!,
+          prover: prover!,
+          crypto: crypto!,
+          storage: storage!,
+          network: network!,
+          onProgress: (msg) => logger.info('Progress:', msg),
+        }
+      );
+
+      if (!result.success || !result.data) {
+        throw new Error(result.error || 'Failed to accept proposal');
+      }
+
+      // Update badge with the new state
+      onBadgeUpdate?.(result.data.updatedBadge);
+      
+      setIncomingProposal(null);
+      setView('inbox');
+      
+      return result.data.activeTransaction;
+    } catch (error) {
+      logger.error('Failed to accept proposal:', error);
+      throw error;
+    } finally {
+      setIsAccepting(false);
+    }
   };
 
   const handleDecline = () => {

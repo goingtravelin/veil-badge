@@ -7,8 +7,8 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    setupFiles: ['./test/setup.ts'],
-    include: ['test/**/*.test.{ts,tsx}'],
+    setupFiles: ['./tests/setup.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     // Isolate tests to prevent ECC library conflicts
     isolate: true,
     coverage: {

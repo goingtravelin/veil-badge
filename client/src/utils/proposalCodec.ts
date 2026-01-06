@@ -97,6 +97,12 @@ function getCanonicalBytes(
   // proposer_badge_id (32 bytes)
   parts.push(hexToBytes(proposal.proposerBadgeId));
 
+  // proposer_badge_utxo (36 bytes: 32 byte txid + 4 byte vout)
+  parts.push(hexToBytes(proposal.proposerBadgeUtxo.txid));
+  const voutBytes = new Uint8Array(4);
+  new DataView(voutBytes.buffer).setUint32(0, proposal.proposerBadgeUtxo.vout, false); // big-endian
+  parts.push(voutBytes);
+
   if (proposal.counterpartyBadgeId) {
     parts.push(hexToBytes(proposal.counterpartyBadgeId));
   } else if (proposal.counterpartyAddress) {
@@ -146,7 +152,9 @@ export async function createUnsignedProposal(
 
   const proposalData = {
     proposerBadgeId: input.proposerBadgeId,
+    proposerBadgeUtxo: input.proposerBadgeUtxo,
     counterpartyBadgeId: input.counterpartyBadgeId,
+    counterpartyAddress: input.counterpartyAddress,
     value: input.value,
     category: input.category,
     windowBlocks: input.windowBlocks ?? DEFAULT_WINDOW_BLOCKS,

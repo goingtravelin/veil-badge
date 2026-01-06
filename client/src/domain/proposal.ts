@@ -34,6 +34,9 @@ export interface Proposal {
   /** Badge ID of the party creating the proposal */
   proposerBadgeId: B32;
 
+  /** Proposer's badge UTXO (for atomic update) */
+  proposerBadgeUtxo: { txid: string; vout: number };
+
   /** Badge ID of the intended counterparty (optional if using address) */
   counterpartyBadgeId?: B32;
 
@@ -67,6 +70,7 @@ export interface Proposal {
 
 export interface CreateProposalInput {
   proposerBadgeId: B32;
+  proposerBadgeUtxo: { txid: string; vout: number };
   counterpartyBadgeId?: B32;
   counterpartyAddress?: string;
   value: number;

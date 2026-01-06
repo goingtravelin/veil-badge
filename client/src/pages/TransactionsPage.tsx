@@ -6,11 +6,10 @@ import { ProposeTransaction } from '../components/ProposeTransaction';
 import { AcceptProposal } from '../components/AcceptProposal';
 import { extractProposalFromUrl } from '../utils/proposalCodec';
 import { createLogger } from '../utils/logger';
-import type { VeilBadge, BadgeWithUtxo } from '../types';
+import type { VeilBadge, BadgeWithUtxo, WalletState } from '../types';
 import type { Proposal, ActiveTransaction } from '../domain/proposal';
 import { acceptProposal } from '../application/acceptProposal';
-import { useWallet } from '../hooks/useWallet';
-import { useCharmsWasm } from '../hooks/useCharmsWasm';
+import { createBitcoinService, createProverService, createCryptoService, createStorageService } from '../services';
 
 const logger = createLogger('TransactionsPage');
 
@@ -19,6 +18,7 @@ interface TransactionsPageProps {
   currentBlock: number;
   signMessage: (message: string) => Promise<string>;
   onBadgeUpdate?: (badge: VeilBadge) => void;
+  wallet: WalletState;
 }
 
 type View = 'inbox' | 'propose' | 'accept';
@@ -28,14 +28,10 @@ export function TransactionsPage({
   currentBlock,
   signMessage,
   onBadgeUpdate,
+  wallet,
 }: TransactionsPageProps) {
   const [view, setView] = useState<View>('propose');
   const [incomingProposal, setIncomingProposal] = useState<Proposal | null>(null);
-  const [isAccepting, setIsAccepting] = useState(false);
-
-  // Get wallet context for UTXOs and ports
-  const { address, utxos, network, bitcoin, crypto, storage } = useWallet();
-  const { prover } = useCharmsWasm();
 
   // Check URL for incoming proposal on mount
   useEffect(() => {
@@ -56,26 +52,34 @@ export function TransactionsPage({
   const handleAccept = async (proposal: Proposal, signature: string): Promise<ActiveTransaction> => {
     logger.info('Accepting proposal:', proposal.id);
     
-    setIsAccepting(true);
+    if (!wallet.address) {
+      throw new Error('Wallet not connected');
+    }
     
     try {
+      // Create service instances
+      const bitcoinService = createBitcoinService('mempool');
+      const proverService = createProverService('remote');
+      const cryptoService = createCryptoService();
+      const storageService = createStorageService();
+
       // Call the actual acceptProposal use case
       const result = await acceptProposal(
         {
           proposal,
           myBadge: myBadge.badge,
           myBadgeUtxo: myBadge.utxo,
-          availableUtxos: utxos,
-          myAddress: address!,
+          availableUtxos: wallet.utxos,
+          myAddress: wallet.address,
           mySignature: signature,
-          network,
+          network: wallet.network,
         },
         {
-          bitcoin: bitcoin!,
-          prover: prover!,
-          crypto: crypto!,
-          storage: storage!,
-          network: network!,
+          bitcoin: bitcoinService,
+          prover: proverService,
+          crypto: cryptoService,
+          storage: storageService,
+          network: wallet.network,
           onProgress: (msg) => logger.info('Progress:', msg),
         }
       );
@@ -94,8 +98,6 @@ export function TransactionsPage({
     } catch (error) {
       logger.error('Failed to accept proposal:', error);
       throw error;
-    } finally {
-      setIsAccepting(false);
     }
   };
 
@@ -149,6 +151,7 @@ export function TransactionsPage({
           {view === 'propose' && (
             <ProposeTransaction
               myBadgeId={myBadge.badge.id}
+              myBadgeUtxo={myBadge.utxo}
               currentBlock={currentBlock}
               signMessage={signMessage}
               onProposalCreated={handleProposalCreated}

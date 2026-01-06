@@ -18,6 +18,8 @@ import {
 import { generateAcceptProposalSpell } from '../utils/spellGenerator';
 import { createLogger } from '../utils/logger';
 import { selectFundingUtxo } from '../domain/bitcoin';
+import { charmsService } from '../services/CharmsService';
+import { VEIL_APP_IDENTITY, VEIL_APP_VK } from '../domain';
 
 const logger = createLogger('acceptProposal');
 
@@ -96,13 +98,47 @@ export async function acceptProposal(
       };
     }
 
+    onProgress?.('Fetching proposer badge...');
+
+    // Fetch proposer's badge from their UTXO using CharmsService
+    const proposerBadgeUtxo = proposal.proposerBadgeUtxo;
+    logger.debug('Fetching proposer badge from UTXO:', `${proposerBadgeUtxo.txid.slice(0, 8)}:${proposerBadgeUtxo.vout}`);
+    
+    const veilAppSpec = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
+    const proposerBadge = await charmsService.scanUtxoForBadge(
+      proposerBadgeUtxo.txid,
+      proposerBadgeUtxo.vout,
+      veilAppSpec,
+      network
+    );
+
+    if (!proposerBadge) {
+      return {
+        success: false,
+        error: 'Proposer badge not found or invalid. They may have spent it. Please request a new proposal.',
+      };
+    }
+
+    // Verify proposer badge ID matches
+    if (proposerBadge.id !== proposal.proposerBadgeId) {
+      return {
+        success: false,
+        error: 'Proposer badge ID mismatch. Invalid proposal.',
+      };
+    }
+
+    logger.info('Proposer badge verified:', {
+      badgeId: proposerBadge.id.slice(0, 16),
+      utxo: `${proposerBadgeUtxo.txid.slice(0, 8)}:${proposerBadgeUtxo.vout}`,
+    });
+
     onProgress?.('Creating active transaction...');
 
     // Calculate window deadlines
     const windowEndsAt = currentBlock + proposal.windowBlocks;
     const reportDeadline = windowEndsAt + proposal.reportWindowBlocks;
 
-    // Create the active transaction
+    // Create the active transaction (same for both parties)
     const activeTransaction: ActiveTransaction = {
       id: proposal.id,
       counterpartyBadgeId: proposal.proposerBadgeId,
@@ -114,41 +150,76 @@ export async function acceptProposal(
       iAmProposer: false,
     };
 
-    // Create updated badge with active transaction added
-    const updatedBadge: VeilBadge = {
+    // For proposer, they see the inverse
+    const proposerActiveTransaction: ActiveTransaction = {
+      id: proposal.id,
+      counterpartyBadgeId: myBadge.id,
+      value: proposal.value,
+      category: proposal.category as TxCategory,
+      startedAt: currentBlock,
+      windowEndsAt,
+      reportDeadline,
+      iAmProposer: true,
+    };
+
+    // Create updated badges with active transactions added
+    const acceptorUpdatedBadge: VeilBadge = {
       ...myBadge,
       active_transactions: [...myBadge.active_transactions, activeTransaction],
       last_update: currentBlock,
     };
 
-    onProgress?.('Generating spell...');
+    const proposerUpdatedBadge: VeilBadge = {
+      ...proposerBadge,
+      active_transactions: [...proposerBadge.active_transactions, proposerActiveTransaction],
+      last_update: currentBlock,
+    };
 
-    // Generate the accept proposal spell
+    // Get proposer's address (from UTXO)
+    // For now, we'll need to extract this from the transaction output
+    // Simplified: use a helper or the UTXO value from the badge itself
+    // TODO: Properly extract address from proposer's UTXO scriptPubKey
+    const proposerAddress = myAddress; // TEMPORARY - in production, fetch from proposer's badge/profile
+
+    onProgress?.('Generating atomic spell...');
+
+    // Generate the atomic accept proposal spell (updates BOTH badges)
     const spellYaml = generateAcceptProposalSpell({
-      badgeUtxo: myBadgeUtxo,
-      oldBadge: myBadge,
-      newBadge: updatedBadge,
+      acceptorBadgeUtxo: myBadgeUtxo,
+      acceptorOldBadge: myBadge,
+      acceptorNewBadge: acceptorUpdatedBadge,
+      acceptorAddress: myAddress,
+      proposerBadgeUtxo: {
+        txid: proposerBadgeUtxo.txid,
+        vout: proposerBadgeUtxo.vout,
+        value: 546, // DUST_LIMIT
+        scriptPubKey: '',
+      },
+      proposerOldBadge: proposerBadge,
+      proposerNewBadge: proposerUpdatedBadge,
+      proposerAddress,
       proposalId: proposal.id,
-      proposerBadgeId: proposal.proposerBadgeId,
       value: proposal.value,
       category: proposal.category,
       windowBlocks: proposal.windowBlocks,
       reportWindowBlocks: proposal.reportWindowBlocks,
       currentBlock,
-      destinationAddress: myAddress,
     });
 
-    logger.debug('Generated spell YAML length:', spellYaml.length);
+    logger.debug('Generated atomic spell YAML length:', spellYaml.length);
 
-    // Get previous transaction for proving (badge UTXO)
-    logger.debug('Fetching badge prev tx:', myBadgeUtxo.txid.slice(0, 16));
-    const badgePrevTx = await bitcoin.fetchTransaction(myBadgeUtxo.txid, network);
-    logger.debug('Badge prev tx fetched, length:', badgePrevTx.length);
+    // Get previous transactions for proving (BOTH badge UTXOs)
+    logger.debug('Fetching acceptor badge prev tx:', myBadgeUtxo.txid.slice(0, 16));
+    const acceptorPrevTx = await bitcoin.fetchTransaction(myBadgeUtxo.txid, network);
+    
+    logger.debug('Fetching proposer badge prev tx:', proposerBadgeUtxo.txid.slice(0, 16));
+    const proposerPrevTx = await bitcoin.fetchTransaction(proposerBadgeUtxo.txid, network);
+    
+    logger.debug('Both prev txs fetched');
 
     onProgress?.('Selecting funding UTXO...');
 
-    // Find a funding UTXO (separate from badge UTXO) to pay fees
-    // Filter out the badge UTXO itself
+    // Find a funding UTXO (separate from BOTH badge UTXOs) to pay fees
     logger.debug('Available UTXOs for funding:', input.availableUtxos.map(u => ({
       txid: u.txid.slice(0, 8),
       vout: u.vout,
@@ -156,9 +227,12 @@ export async function acceptProposal(
     })));
     
     const otherUtxos = input.availableUtxos.filter(
-      u => !(u.txid === myBadgeUtxo.txid && u.vout === myBadgeUtxo.vout)
+      u => !(
+        (u.txid === myBadgeUtxo.txid && u.vout === myBadgeUtxo.vout) ||
+        (u.txid === proposerBadgeUtxo.txid && u.vout === proposerBadgeUtxo.vout)
+      )
     );
-    logger.debug('UTXOs after filtering badge UTXO:', otherUtxos.length);
+    logger.debug('UTXOs after filtering both badge UTXOs:', otherUtxos.length);
     
     // Get burned UTXOs to exclude (UTXOs already sent to prover)
     const burnedUtxos = storage.getBurnedUtxos?.() ?? [];
@@ -175,7 +249,7 @@ export async function acceptProposal(
       });
       return {
         success: false,
-        error: `No suitable funding UTXO found. Need at least ${MIN_FUNDING_SATS} sats (separate from badge UTXO) to pay transaction fees.`,
+        error: `No suitable funding UTXO found. Need at least ${MIN_FUNDING_SATS} sats (separate from both badge UTXOs) to pay transaction fees.`,
       };
     }
     
@@ -187,9 +261,9 @@ export async function acceptProposal(
 
     onProgress?.('Proving transaction...');
 
-    // Get funding UTXO's prev tx if different from badge
-    const prevTxs = [badgePrevTx];
-    if (fundingUtxo.txid !== myBadgeUtxo.txid) {
+    // Get funding UTXO's prev tx if different from both badge UTXOs
+    const prevTxs = [acceptorPrevTx, proposerPrevTx];
+    if (fundingUtxo.txid !== myBadgeUtxo.txid && fundingUtxo.txid !== proposerBadgeUtxo.txid) {
       logger.debug('Fetching funding prev tx:', fundingUtxo.txid.slice(0, 16));
       const fundingPrevTx = await bitcoin.fetchTransaction(fundingUtxo.txid, network);
       prevTxs.push(fundingPrevTx);
@@ -232,7 +306,7 @@ export async function acceptProposal(
         data: {
           txid: 'mock_txid_' + Date.now(),
           activeTransaction,
-          updatedBadge,
+          updatedBadge: acceptorUpdatedBadge,
         },
       };
     }
@@ -242,14 +316,14 @@ export async function acceptProposal(
     // Broadcast the spell transaction
     const txid = await bitcoin.broadcast(proveResult.spellTx, network);
 
-    logger.info('Proposal accepted successfully', { txid, proposalId: proposal.id });
+    logger.info('Proposal accepted successfully (atomic)', { txid, proposalId: proposal.id });
 
     return {
       success: true,
       data: {
         txid,
         activeTransaction,
-        updatedBadge,
+        updatedBadge: acceptorUpdatedBadge,
       },
     };
   } catch (error) {

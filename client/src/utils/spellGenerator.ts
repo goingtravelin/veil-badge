@@ -15,79 +15,112 @@ const logger = createLogger('SpellGenerator');
 const DUST_LIMIT_SATS = 546;
 
 export interface AcceptProposalSpellParams {
-  badgeUtxo: UtxoInfo;
-  oldBadge: VeilBadge;
-  newBadge: VeilBadge;
+  // Acceptor (my) badge
+  acceptorBadgeUtxo: UtxoInfo;
+  acceptorOldBadge: VeilBadge;
+  acceptorNewBadge: VeilBadge;
+  acceptorAddress: string;
+  
+  // Proposer's badge
+  proposerBadgeUtxo: UtxoInfo;
+  proposerOldBadge: VeilBadge;
+  proposerNewBadge: VeilBadge;
+  proposerAddress: string;
+  
+  // Transaction details
   proposalId: string;
-  proposerBadgeId: string;
   value: number;
   category: TxCategory;
   windowBlocks: number;
   reportWindowBlocks: number;
   currentBlock: number;
-  destinationAddress: string;
 }
 
 export function generateAcceptProposalSpell(params: AcceptProposalSpellParams): string {
   const {
-    badgeUtxo,
-    oldBadge,
-    newBadge,
+    acceptorBadgeUtxo,
+    acceptorOldBadge,
+    acceptorNewBadge,
+    acceptorAddress,
+    proposerBadgeUtxo,
+    proposerOldBadge,
+    proposerNewBadge,
+    proposerAddress,
     proposalId,
-    proposerBadgeId,
     value,
     category,
     windowBlocks,
     reportWindowBlocks,
     currentBlock,
-    destinationAddress,
   } = params;
 
-  logger.info('Generating AcceptProposal spell:', {
-    badgeUtxo: `${badgeUtxo.txid.slice(0, 8)}:${badgeUtxo.vout}`,
-    badgeId: oldBadge.id.slice(0, 16),
+  logger.info('Generating AcceptProposal spell (atomic):', {
+    proposerUtxo: `${proposerBadgeUtxo.txid.slice(0, 8)}:${proposerBadgeUtxo.vout}`,
+    proposerBadgeId: proposerOldBadge.id.slice(0, 16),
+    acceptorUtxo: `${acceptorBadgeUtxo.txid.slice(0, 8)}:${acceptorBadgeUtxo.vout}`,
+    acceptorBadgeId: acceptorOldBadge.id.slice(0, 16),
     proposalId: proposalId.slice(0, 16),
-    proposerBadgeId: proposerBadgeId.slice(0, 16),
     value,
     category,
-    windowBlocks,
-    reportWindowBlocks,
-    currentBlock,
-    oldBadgeActiveTxs: oldBadge.active_transactions.length,
-    newBadgeActiveTxs: newBadge.active_transactions.length,
   });
 
-  // App identity = badge ID = SHA256(genesis UTXO) from when badge was minted
-  const appId = oldBadge.id;
+  // Both badges use their own app ID (genesis UTXO hash)
+  const proposerAppId = proposerOldBadge.id;
+  const acceptorAppId = acceptorOldBadge.id;
   const appVk = VEIL_APP_VK;
 
-  // Serialize badge states in YAML-friendly format (inline with spell)
-  const oldBadgeYaml = serializeBadgeStateYaml(oldBadge);
-  const newBadgeYaml = serializeBadgeStateYaml(newBadge);
+  // Serialize badge states
+  const proposerOldYaml = serializeBadgeStateYaml(proposerOldBadge);
+  const proposerNewYaml = serializeBadgeStateYaml(proposerNewBadge);
+  const acceptorOldYaml = serializeBadgeStateYaml(acceptorOldBadge);
+  const acceptorNewYaml = serializeBadgeStateYaml(acceptorNewBadge);
 
   const spell = `version: 8
 
 apps:
-  $00: "n/${appId}/${appVk}"
+  $00: "n/${proposerAppId}/${appVk}"
+  $01: "n/${acceptorAppId}/${appVk}"
 
 ins:
-  - utxo_id: "${badgeUtxo.txid}:${badgeUtxo.vout}"
+  # Input 0: Proposer's current badge
+  - utxo_id: "${proposerBadgeUtxo.txid}:${proposerBadgeUtxo.vout}"
     charms:
       $00:
-${oldBadgeYaml}
+${proposerOldYaml}
+
+  # Input 1: Acceptor's current badge
+  - utxo_id: "${acceptorBadgeUtxo.txid}:${acceptorBadgeUtxo.vout}"
+    charms:
+      $01:
+${acceptorOldYaml}
 
 outs:
-  - address: "${destinationAddress}"
+  # Output 0: Updated proposer badge
+  - address: "${proposerAddress}"
     sats: ${DUST_LIMIT_SATS}
     charms:
       $00:
-${newBadgeYaml}
+${proposerNewYaml}
+
+  # Output 1: Updated acceptor badge
+  - address: "${acceptorAddress}"
+    sats: ${DUST_LIMIT_SATS}
+    charms:
+      $01:
+${acceptorNewYaml}
 
 public_args:
   $00:
     AcceptProposal:
       proposal_id: "${proposalId}"
-      proposer_badge_id: "${proposerBadgeId}"
+      value: ${value}
+      category: ${category}
+      window_blocks: ${windowBlocks}
+      report_window_blocks: ${reportWindowBlocks}
+      current_block: ${currentBlock}
+  $01:
+    AcceptProposal:
+      proposal_id: "${proposalId}"
       value: ${value}
       category: ${category}
       window_blocks: ${windowBlocks}
@@ -95,7 +128,7 @@ public_args:
       current_block: ${currentBlock}
 `;
 
-  logger.debug('Generated AcceptProposal spell YAML:', spell);
+  logger.debug('Generated atomic AcceptProposal spell YAML');
   return spell;
 }
 

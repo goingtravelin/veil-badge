@@ -198,6 +198,7 @@ function App() {
             myBadge={myBadge}
             currentBlock={currentBlock}
             signMessage={signMessage}
+            wallet={wallet}
             onBadgeUpdate={(updatedBadge) => {
               logger.debug('[App] Badge updated:', updatedBadge.id);
               refreshBadges();

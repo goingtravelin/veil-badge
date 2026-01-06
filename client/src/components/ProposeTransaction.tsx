@@ -15,6 +15,8 @@ import {
 interface ProposeTransactionProps {
   /** Current user's badge ID */
   myBadgeId: B32;
+  /** Current user's badge UTXO (for atomic proposals) */
+  myBadgeUtxo: { txid: string; vout: number };
   /** Current block height */
   currentBlock: number;
   /** Function to sign a message with wallet */
@@ -27,6 +29,7 @@ type Step = 'form' | 'signing' | 'share';
 
 export function ProposeTransaction({
   myBadgeId,
+  myBadgeUtxo,
   currentBlock,
   signMessage,
   onProposalCreated,
@@ -90,6 +93,7 @@ export function ProposeTransaction({
       // Create unsigned proposal
       const input: CreateProposalInput = {
         proposerBadgeId: myBadgeId,
+        proposerBadgeUtxo: myBadgeUtxo,
         counterpartyBadgeId: useAddress ? undefined : counterpartyId,
         counterpartyAddress: useAddress ? counterpartyAddress : undefined,
         value,

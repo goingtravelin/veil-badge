@@ -9,6 +9,7 @@ import {
   parseAppSpec,
   buildAppSpec,
   findFirstNftAppSpec,
+  decodeRiskFlags,
   type ParsedSpell,
 } from '../../src/utils/charms';
 import { VEIL_APP_VK, VEIL_APP_IDENTITY } from '../../src/domain';
@@ -393,5 +394,116 @@ describe('buildAppSpec', () => {
 
     const result = buildAppSpec({ tag: 't', identity, vk });
     expect(result).toBe(`t/${identity}/${vk}`);
+  });
+});
+
+describe('decodeRiskFlags', () => {
+  it('should decode flags=0 as all false', () => {
+    const flags = decodeRiskFlags(0);
+    expect(flags).toEqual({
+      acceleration: false,
+      extraction: false,
+      isolated: false,
+      too_clean: false,
+      erratic: false,
+      new_badge: false,
+    });
+  });
+
+  it('should decode new_badge flag (0b00100000 = 32)', () => {
+    const flags = decodeRiskFlags(32);
+    expect(flags.new_badge).toBe(true);
+    expect(flags.acceleration).toBe(false);
+  });
+
+  it('should decode isolated flag (0b00000100 = 4)', () => {
+    const flags = decodeRiskFlags(4);
+    expect(flags.isolated).toBe(true);
+    expect(flags.new_badge).toBe(false);
+  });
+
+  it('should decode new_badge + isolated (0b00100100 = 36)', () => {
+    // This is what a freshly minted badge has
+    const flags = decodeRiskFlags(36);
+    expect(flags.new_badge).toBe(true);
+    expect(flags.isolated).toBe(true);
+    expect(flags.acceleration).toBe(false);
+  });
+
+  it('should decode all flags set (0b00111111 = 63)', () => {
+    const flags = decodeRiskFlags(63);
+    expect(flags).toEqual({
+      acceleration: true,
+      extraction: true,
+      isolated: true,
+      too_clean: true,
+      erratic: true,
+      new_badge: true,
+    });
+  });
+
+  it('should decode acceleration only (0b00000001 = 1)', () => {
+    const flags = decodeRiskFlags(1);
+    expect(flags.acceleration).toBe(true);
+    expect(flags.extraction).toBe(false);
+  });
+
+  it('should decode extraction only (0b00000010 = 2)', () => {
+    const flags = decodeRiskFlags(2);
+    expect(flags.extraction).toBe(true);
+    expect(flags.acceleration).toBe(false);
+  });
+});
+
+describe('extractVeilBadge with flags conversion', () => {
+  const veilAppId = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
+
+  it('should convert numeric flags to RiskFlags object', () => {
+    const spell: ParsedSpell = {
+      version: 8,
+      tx: {
+        ins: ['abc:0'],
+        outs: [new Map([[0, {
+          id: 'a'.repeat(64),
+          pubkey: '02' + 'b'.repeat(64),
+          volume_sum_squares: 0,
+          flags: 36, // NEW_BADGE | ISOLATED as number
+          trust: 15,
+          risk: 35,
+          // ... other required fields
+          created_at: 100000,
+          tx_total: 0,
+          tx_positive: 0,
+          tx_negative: 0,
+          volume_total: 0,
+          window_tx_count: 0,
+          window_volume: 0,
+          window_start: 100000,
+          counterparty_count: 0,
+          backing: { backed_count: 0, unbacked_count: 0, backed_volume: 0, unbacked_volume: 0 },
+          vouches_out: [],
+          vouches_in: [],
+          cascade_damage: 0,
+          active_transactions: [],
+          reporting_transactions: [],
+          outcomes: { mutual_positive: 0, mutual_negative: 0, contested_i_positive: 0, contested_i_negative: 0, timeout: 0, mutual_timeout: 0 },
+          last_nonce: '0'.repeat(64),
+          last_update: 100000,
+        }]])],
+      },
+      app_public_inputs: new Map([[veilAppId, {}]]),
+    };
+
+    const badge = extractVeilBadge(spell, veilAppId, 0);
+
+    expect(badge).not.toBeNull();
+    expect(badge?.flags).toEqual({
+      acceleration: false,
+      extraction: false,
+      isolated: true,
+      too_clean: false,
+      erratic: false,
+      new_badge: true,
+    });
   });
 });

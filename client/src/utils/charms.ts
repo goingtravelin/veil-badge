@@ -7,7 +7,7 @@
 
 // use CharmsService from services/CharmsService.ts
 
-import type { VeilBadge } from '../domain/types';
+import type { VeilBadge, RiskFlags } from '../domain/types';
 
 export interface CharmsApp {
   tag: 'n' | 't';
@@ -36,6 +36,27 @@ export interface CharmScanResult {
 }
 
 export const VEIL_APP_TAG = 'n';
+
+/**
+ * Decode risk flags from a bitfield number to a RiskFlags object.
+ * Bit positions match the Rust enum order:
+ * - bit 0 (0b00000001): acceleration
+ * - bit 1 (0b00000010): extraction
+ * - bit 2 (0b00000100): isolated
+ * - bit 3 (0b00001000): too_clean
+ * - bit 4 (0b00010000): erratic
+ * - bit 5 (0b00100000): new_badge
+ */
+export function decodeRiskFlags(flags: number): RiskFlags {
+  return {
+    acceleration: (flags & 0b00000001) !== 0,
+    extraction: (flags & 0b00000010) !== 0,
+    isolated: (flags & 0b00000100) !== 0,
+    too_clean: (flags & 0b00001000) !== 0,
+    erratic: (flags & 0b00010000) !== 0,
+    new_badge: (flags & 0b00100000) !== 0,
+  };
+}
 
 export function parseAppSpec(appSpec: string): CharmsApp | null {
   const parts = appSpec.split('/');
@@ -153,6 +174,11 @@ export function extractVeilBadge(
   // Ensure volume_sum_squares is a BigInt (WASM may return number or BigInt)
   if (badge.volume_sum_squares !== undefined) {
     badge.volume_sum_squares = BigInt(badge.volume_sum_squares as number | bigint);
+  }
+
+  // Convert flags from bitfield number to RiskFlags object if needed
+  if (typeof badge.flags === 'number') {
+    badge.flags = decodeRiskFlags(badge.flags);
   }
 
   return badge as unknown as VeilBadge;

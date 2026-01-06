@@ -141,12 +141,13 @@ export function createToken(identity: string, vk: string, amount: number): Charm
 
 export const VEIL_APP_IDENTITY = '0'.repeat(64); 
 
-export const VEIL_APP_VK = 'c64ee9ff499b845c18ae0734fdb4b3fe6a5ae0d65eb3fb10adcbaa5e6d4bc4d3';
+export const VEIL_APP_VK = '8106b8702451d5536e06d802aa343c4114df0376934df5494adb72fb2057329b';
 
 // Previous VKs that are accepted for migration
 // NOTE: Only add VKs here if you have the corresponding WASM binary archived
 // in client/public/wasm/veil-{vk-prefix}.wasm
 export const VEIL_PREVIOUS_VKS: string[] = [
+  'c64ee9ff499b845c18ae0734fdb4b3fe6a5ae0d65eb3fb10adcbaa5e6d4bc4d3',
   '387be787323b18dee023608f81ee6ba263b3b5a63efb4953a4ca6541e95c48b6',
   'ce9c54337c77f295a8b6446ec1ba32d26a1b1171512a761362b5f4f437186342',
   '82ec6997e7174e3b298cc54b154150eebfdca3d504137cc6b8620d8c17e57da4',

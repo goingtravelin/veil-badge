@@ -119,8 +119,15 @@ export function extractVeilBadge(
   const charmData = outputMap.get(appIndex);
   if (!charmData || typeof charmData !== 'object') return null;
 
+  // WASM may return badge data as a Map - convert to plain object
+  let badge: Record<string, unknown>;
+  if (charmData instanceof Map) {
+    badge = Object.fromEntries(charmData);
+  } else {
+    badge = charmData as Record<string, unknown>;
+  }
+
   // Validate that the object has required VeilBadge properties
-  const badge = charmData as Record<string, unknown>;
   if (typeof badge.id !== 'string' || !badge.id) {
     console.warn('[extractVeilBadge] Invalid badge: missing or invalid id', badge);
     return null;

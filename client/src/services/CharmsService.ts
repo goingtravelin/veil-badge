@@ -82,6 +82,16 @@ let wasmInitialized = false;
 let wasmInitPromise: Promise<void> | null = null;
 let wasmBindings: any = null;
 
+// Cache for spell extraction results (txid -> spell or null)
+// Prevents re-parsing the same transaction multiple times (~500ms each)
+const spellCache = new Map<string, ParsedSpell | null>();
+const SPELL_CACHE_MAX_SIZE = 100;
+
+function getSpellCacheKey(txHex: string): string {
+  // Use first 64 chars of txHex as cache key (unique enough)
+  return txHex.slice(0, 64);
+}
+
 export class WasmCharmsService implements ICharmsService {
   async initWasm(): Promise<void> {
     if (wasmInitialized) return;
@@ -144,16 +154,41 @@ export class WasmCharmsService implements ICharmsService {
       throw new Error('WASM module not initialized. Call initWasm() first.');
     }
 
+    // Check cache first
+    const cacheKey = getSpellCacheKey(txHex);
+    if (spellCache.has(cacheKey)) {
+      const cached = spellCache.get(cacheKey);
+      logger.debug('[extractSpell] Cache hit for', txHex.slice(0, 16));
+      return cached ?? null;
+    }
+
     try {
       logger.debug('[extractSpell] Attempting extraction, txHex length:', txHex.length, 'first 20 chars:', txHex.slice(0, 20));
       // WASM expects a tagged union object: { bitcoin: txHex } for Bitcoin transactions
       const result = wasmBindings.extractAndVerifySpell({ bitcoin: txHex }, mock);
       logger.debug('[extractSpell] Result:', result ? 'spell found' : 'null');
+      
+      // Cache the result
+      if (spellCache.size >= SPELL_CACHE_MAX_SIZE) {
+        // Evict oldest entry
+        const firstKey = spellCache.keys().next().value;
+        if (firstKey) spellCache.delete(firstKey);
+      }
+      spellCache.set(cacheKey, result as ParsedSpell);
+      
       return result as ParsedSpell;
     } catch (error) {
       // Log ALL errors for debugging
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.debug('[extractSpell] Error:', errorMsg.slice(0, 200));
+      
+      // Cache failures too (e.g., "no control block" for non-charms txs)
+      if (spellCache.size >= SPELL_CACHE_MAX_SIZE) {
+        const firstKey = spellCache.keys().next().value;
+        if (firstKey) spellCache.delete(firstKey);
+      }
+      spellCache.set(cacheKey, null);
+      
       return null;
     }
   }

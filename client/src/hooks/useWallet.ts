@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   WalletState,
   Network,
@@ -127,6 +127,9 @@ export function useWallet(): UseWalletReturn {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [connectionLoading, setConnectionLoading] = useState<boolean>(false);
   const [txStatus, setTxStatus] = useState<string | null>(null);
+  
+  // Ref to track ongoing refreshBadges calls and prevent duplicate execution
+  const refreshBadgesInProgress = useRef<Promise<void> | null>(null);
 
   // Computed: primary badge with its UTXO (always in sync)
   const myBadge = useMemo<BadgeWithUtxo | null>(() => {
@@ -311,50 +314,57 @@ export function useWallet(): UseWalletReturn {
     logger.debug(`[refreshBadges] Called. connected=${wallet.connected}, utxos=${wallet.utxos?.length || 0}`);
     if (!wallet.connected || !wallet.utxos) return;
 
-    try {
-      // Use VK-based discovery: any identity + our VK = Veil badge
-      // Format: n/<any-identity>/<our-vk>
-      // We use a dummy identity since hasVeilBadge now extracts and matches VK only
-      const veilAppSpec = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
-      logger.debug(`[refreshBadges] Scanning ${wallet.utxos.length} UTXOs with veilAppSpec=${veilAppSpec}`);
-      const discovered = await charmsService.discoverBadgesInUtxos(
-        wallet.utxos,
-        veilAppSpec,
-        wallet.network
-      );
-      logger.debug(`[refreshBadges] Discovery complete. Found ${discovered.length} badges`);
-      
-      // Merge discovered badges with existing ones (deduplicate by ID)
-      // Discovered badges take precedence as they have confirmed on-chain state
-      setBadges(prev => {
-        const badgeMap = new Map<string, VeilBadge>();
-        // Add existing badges first
-        for (const badge of prev) {
-          badgeMap.set(badge.id, badge);
-        }
-        // Override with discovered badges (they have on-chain truth)
+    // Deduplicate: if a refresh is already in progress, wait for it instead of starting another
+    if (refreshBadgesInProgress.current) {
+      logger.debug('[refreshBadges] Already in progress, reusing existing promise');
+      return refreshBadgesInProgress.current;
+    }
+
+    const doRefresh = async () => {
+      try {
+        // Use VK-based discovery: any identity + our VK = Veil badge
+        // Format: n/<any-identity>/<our-vk>
+        // We use a dummy identity since hasVeilBadge now extracts and matches VK only
+        const veilAppSpec = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
+        logger.debug(`[refreshBadges] Scanning ${wallet.utxos.length} UTXOs with veilAppSpec=${veilAppSpec}`);
+        const discovered = await charmsService.discoverBadgesInUtxos(
+          wallet.utxos,
+          veilAppSpec,
+          wallet.network
+        );
+        logger.debug(`[refreshBadges] Discovery complete. Found ${discovered.length} badges`);
+        
+        // Merge discovered badges with existing ones (deduplicate by ID)
+        // Discovered badges take precedence as they have confirmed on-chain state
+        setBadges(prev => {
+          const badgeMap = new Map<string, VeilBadge>();
+          // Add existing badges first
+          for (const badge of prev) {
+            badgeMap.set(badge.id, badge);
+          }
+          // Override with discovered badges (they have on-chain truth)
+          for (const d of discovered) {
+            badgeMap.set(d.badge.id, d.badge);
+          }
+          const merged = Array.from(badgeMap.values());
+          persistBadges(merged);
+          return merged;
+        });
+        
+        // Store badge UTXO mappings from discovered badges
+        const utxoMap = new Map<string, UtxoInfo>();
         for (const d of discovered) {
-          badgeMap.set(d.badge.id, d.badge);
+          // Skip badges without valid IDs
+          if (!d.badge?.id) {
+            logger.warn('[refreshBadges] Skipping discovered badge with missing id');
+            continue;
+          }
+          // Find the full UTXO info from wallet UTXOs
+          const fullUtxo = wallet.utxos.find(u => u.txid === d.txid && u.vout === d.vout);
+          if (fullUtxo) {
+            utxoMap.set(d.badge.id, fullUtxo);
+          }
         }
-        const merged = Array.from(badgeMap.values());
-        persistBadges(merged);
-        return merged;
-      });
-      
-      // Store badge UTXO mappings from discovered badges
-      const utxoMap = new Map<string, UtxoInfo>();
-      for (const d of discovered) {
-        // Skip badges without valid IDs
-        if (!d.badge?.id) {
-          logger.warn('[refreshBadges] Skipping discovered badge with missing id');
-          continue;
-        }
-        // Find the full UTXO info from wallet UTXOs
-        const fullUtxo = wallet.utxos.find(u => u.txid === d.txid && u.vout === d.vout);
-        if (fullUtxo) {
-          utxoMap.set(d.badge.id, fullUtxo);
-        }
-      }
       
       // For badges that have stored UTXO info (from minting), use that directly
       // This handles badges loaded from localStorage that weren't found by WASM discovery
@@ -403,11 +413,19 @@ export function useWallet(): UseWalletReturn {
       }
       
       logger.debug('[Veil] Refreshed badges, found', discovered.length, 'utxoMap size:', utxoMap.size);
-    } catch (err) {
-      // Badge discovery errors are expected when UTXOs don't contain badges
-      logger.warn('[Veil] Badge discovery error (this is normal if you have no badges):', err);
-      // Don't set error state for badge discovery failures - just log it
-    }
+      } catch (err) {
+        // Badge discovery errors are expected when UTXOs don't contain badges
+        logger.warn('[Veil] Badge discovery error (this is normal if you have no badges):', err);
+        // Don't set error state for badge discovery failures - just log it
+      } finally {
+        // Clear the in-progress flag
+        refreshBadgesInProgress.current = null;
+      }
+    };
+
+    // Set the promise and execute
+    refreshBadgesInProgress.current = doRefresh();
+    return refreshBadgesInProgress.current;
   }, [wallet.connected, wallet.utxos, wallet.network]);
 
   useEffect(() => {

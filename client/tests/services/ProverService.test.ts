@@ -12,6 +12,9 @@ vi.mock('../../src/utils/appBinary', () => ({
     '0000000000000000000000000000000000000000000000000000000000000000': 'mock_binary_base64',
   }),
   loadVeilAppBinary: vi.fn().mockResolvedValue('mock_binary_base64'),
+  getBinariesForMultipleVks: vi.fn().mockResolvedValue({
+    'test_vk': 'mock_binary_base64',
+  }),
 }));
 
 describe('ProverService', () => {

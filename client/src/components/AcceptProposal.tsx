@@ -225,13 +225,13 @@ export function AcceptProposal({
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Settlement Ends</span>
               <span className="text-white">
-                Block {activeTx.windowEndsAt.toLocaleString()}
+                Block {activeTx.window_ends_at.toLocaleString()}
               </span>
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-gray-400">Report Deadline</span>
               <span className="text-white">
-                Block {activeTx.reportDeadline.toLocaleString()}
+                Block {activeTx.report_deadline.toLocaleString()}
               </span>
             </div>
           </div>
@@ -239,7 +239,7 @@ export function AcceptProposal({
           <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-sm text-blue-200">
             <p>
               Complete your transaction within the settlement window. After it closes,
-              you'll both have {blocksToTime(activeTx.reportDeadline - activeTx.windowEndsAt)} to
+              you'll both have {blocksToTime(activeTx.report_deadline - activeTx.window_ends_at)} to
               report the outcome.
             </p>
           </div>

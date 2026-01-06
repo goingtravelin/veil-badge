@@ -14,6 +14,7 @@ mod accept_proposal_debug {
         id_bytes[0] = id_byte;
         
         VeilBadge {
+            schema_version: SCHEMA_VERSION,
             id: B32(id_bytes),
             created_at,
             pubkey: [2u8; 33], // Compressed pubkey starting with 02
@@ -63,6 +64,7 @@ mod accept_proposal_debug {
 
         // Create input badge (old state)
         let mut old_badge = VeilBadge {
+            schema_version: SCHEMA_VERSION,
             id: my_badge_id,
             created_at,
             pubkey: hex::decode("02c46a17827abc6e42b6df542ef3c30091630ae81b3115d29e037376287d086b33")
@@ -180,6 +182,7 @@ mod accept_proposal_debug {
     fn test_badge_serialization() {
         // Test VeilBadge serialization
         let badge_json = r#"{
+            "schema_version": 1,
             "id": "17174d5381653821041b8baa6f908de2d091c3154ba073f1b94053d84baf2d08",
             "created_at": 117197,
             "pubkey": "02c46a17827abc6e42b6df542ef3c30091630ae81b3115d29e037376287d086b33",

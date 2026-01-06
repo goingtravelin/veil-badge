@@ -124,6 +124,7 @@ fn app_contract_record_succeeds_with_witness() {
     let (_, badge_pubkey) = make_signature(&[0u8; 32]);
 
     let old_badge = VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: B32::from([9u8; 32]),
         created_at: 1_000,
         pubkey: badge_pubkey,
@@ -234,6 +235,7 @@ fn app_contract_vouch_requires_private_witness() {
     let backing_agg = BackingAggregates::default();
 
     let old_badge = VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: B32::from([9u8; 32]),
         created_at: 1_000,
         pubkey: [3u8; 33],

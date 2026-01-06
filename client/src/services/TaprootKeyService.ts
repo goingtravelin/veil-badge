@@ -261,3 +261,39 @@ export function verifyMessageSignature(
     return false;
   }
 }
+
+/**
+ * Extract the address from a transaction output
+ * Parses the raw transaction hex and extracts the address at the given output index
+ * 
+ * @param txHex - The raw transaction hex
+ * @param vout - The output index
+ * @param isTestnet - Whether to use testnet address encoding (default true)
+ * @returns The address as a string, or null if extraction fails
+ */
+export function getAddressFromTxOutput(
+  txHex: string,
+  vout: number,
+  isTestnet: boolean = true
+): string | null {
+  try {
+    const tx = bitcoin.Transaction.fromHex(txHex);
+    
+    if (vout >= tx.outs.length) {
+      logger.warn(`Output index ${vout} out of range (tx has ${tx.outs.length} outputs)`);
+      return null;
+    }
+    
+    const output = tx.outs[vout];
+    const network = isTestnet ? bitcoin.networks.testnet : bitcoin.networks.bitcoin;
+    
+    // Use bitcoin.address.fromOutputScript to decode the address
+    const address = bitcoin.address.fromOutputScript(output.script, network);
+    
+    logger.debug(`Extracted address from tx output ${vout}:`, address.slice(0, 20) + '...');
+    return address;
+  } catch (error) {
+    logger.warn('Failed to extract address from tx output:', error);
+    return null;
+  }
+}

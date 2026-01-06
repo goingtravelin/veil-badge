@@ -146,6 +146,7 @@ fn create_test_badge(tx_positive: u32, tx_negative: u32, _age_blocks: u64) -> Ve
     let volume_sum_squares = volume_total as u128 * 10000;
 
     VeilBadge {
+        schema_version: veil::SCHEMA_VERSION,
         id: B32([0; 32]),
         created_at: 100_000,
         pubkey: [0; 33],

@@ -131,6 +131,7 @@ pub fn make_minted_badge(current_block: u64) -> VeilBadge {
     let genesis = make_genesis_utxo();
     let backing_agg = BackingAggregates::default();
     VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: compute_badge_id(&genesis),
         created_at: current_block,
         pubkey: make_pubkey(),
@@ -166,6 +167,7 @@ pub fn make_established_badge(current_block: u64) -> VeilBadge {
     let created_at = current_block.saturating_sub(NEW_BADGE_THRESHOLD_BLOCKS + 1000);
     let window_start = current_block.saturating_sub(WINDOW_SIZE_BLOCKS).saturating_add(1000);
     VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: compute_badge_id(&genesis),
         created_at,
         pubkey: make_pubkey(),

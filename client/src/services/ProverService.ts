@@ -16,7 +16,6 @@ import { Network } from '../types';
 import { PROVER_ENDPOINTS, DEFAULT_PROVER_CONFIG, PROVER_FALLBACKS, sleep } from '../utils/prover';
 import type { ProverConfig } from '../utils/prover';
 import * as yaml from 'js-yaml';
-import { getVeilAppBinaries } from '../utils/appBinary';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ProverService');
@@ -111,21 +110,29 @@ export class RemoteProverService implements IProverPort {
           if (this.config.mock) {
             binaries = { '0000000000000000000000000000000000000000000000000000000000000000': '' };
           } else {
-            onProgress?.('Loading app binary...');
+            onProgress?.('Loading app binaries...');
 
-            const appSpec = (spellJson as any)?.apps?.$00;
-
-            if (!appSpec || typeof appSpec !== 'string') {
-              throw new Error('Invalid spell: missing or invalid app specification in apps.$00');
+            // Extract all unique VKs from all apps in the spell
+            const apps = (spellJson as any)?.apps;
+            if (!apps || typeof apps !== 'object') {
+              throw new Error('Invalid spell: missing apps section');
             }
 
-            const parts = appSpec.split('/');
-            if (parts.length !== 3) {
-              throw new Error(`Invalid app spec format: ${appSpec}. Expected "n/appId/vk"`);
+            const vks = new Set<string>();
+            for (const [key, appSpec] of Object.entries(apps)) {
+              if (typeof appSpec !== 'string') {
+                throw new Error(`Invalid app spec for ${key}: expected string`);
+              }
+              const parts = appSpec.split('/');
+              if (parts.length !== 3) {
+                throw new Error(`Invalid app spec format for ${key}: ${appSpec}. Expected "n/appId/vk"`);
+              }
+              vks.add(parts[2]);
             }
-            const vk = parts[2];
 
-            binaries = await getVeilAppBinaries(vk);
+            // Load binaries for all VKs
+            const { getBinariesForMultipleVks } = await import('../utils/appBinary');
+            binaries = await getBinariesForMultipleVks([...vks]);
           }
 
           const requestBody: Record<string, any> = {

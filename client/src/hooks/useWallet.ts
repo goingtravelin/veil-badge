@@ -123,6 +123,7 @@ export function useWallet(): UseWalletReturn {
   const [wallet, setWallet] = useState<WalletState>(initialWalletState);
   const [badges, setBadges] = useState<VeilBadge[]>([]);
   const [badgeUtxos, setBadgeUtxos] = useState<Map<string, UtxoInfo>>(new Map());
+  const [badgeVks, setBadgeVks] = useState<Map<string, string>>(new Map()); // Maps badge ID to its VK
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [connectionLoading, setConnectionLoading] = useState<boolean>(false);
@@ -136,10 +137,14 @@ export function useWallet(): UseWalletReturn {
     const badge = badges[0];
     if (!badge) return null;
     
+    // Get the VK this badge was minted with
+    const vk = badgeVks.get(badge.id);
+    logger.debug(`[myBadge] Badge ${badge.id.slice(0,8)}, VK from map: ${vk ? vk.slice(0,16) + '...' : 'NOT FOUND'}, badgeVks size: ${badgeVks.size}`);
+    
     // Try to get UTXO from the map first
     const utxo = badgeUtxos.get(badge.id);
     if (utxo) {
-      return { badge, utxo };
+      return { badge, utxo, vk };
     }
     
     // Fallback: construct from badge.utxo if available
@@ -152,11 +157,12 @@ export function useWallet(): UseWalletReturn {
           value: badge.utxo.value ?? 546, // Use stored value or default to Charms dust
           scriptPubKey: '',
         },
+        vk,
       };
     }
     
     return null;
-  }, [badges, badgeUtxos]);
+  }, [badges, badgeUtxos, badgeVks]);
 
   useEffect(() => {
     const persisted = loadPersistedBadges();
@@ -322,13 +328,30 @@ export function useWallet(): UseWalletReturn {
 
     const doRefresh = async () => {
       try {
+        // Ensure WASM is initialized before badge discovery
+        if (!charmsService.isReady()) {
+          logger.debug('[refreshBadges] WASM not ready, initializing...');
+          await charmsService.initWasm();
+          logger.debug('[refreshBadges] WASM initialized');
+        }
+        
+        // Prioritize dust UTXOs - badges are always 546 sats
+        // This dramatically speeds up discovery by scanning likely badge UTXOs first
+        const sortedUtxos = [...wallet.utxos].sort((a, b) => {
+          const aIsDust = a.value >= 330 && a.value <= 1000;
+          const bIsDust = b.value >= 330 && b.value <= 1000;
+          if (aIsDust && !bIsDust) return -1; // a comes first
+          if (!aIsDust && bIsDust) return 1;  // b comes first
+          return 0;
+        });
+        
         // Use VK-based discovery: any identity + our VK = Veil badge
         // Format: n/<any-identity>/<our-vk>
         // We use a dummy identity since hasVeilBadge now extracts and matches VK only
         const veilAppSpec = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
-        logger.debug(`[refreshBadges] Scanning ${wallet.utxos.length} UTXOs with veilAppSpec=${veilAppSpec}`);
+        logger.debug(`[refreshBadges] Scanning ${sortedUtxos.length} UTXOs (dust-first) with veilAppSpec=${veilAppSpec}`);
         const discovered = await charmsService.discoverBadgesInUtxos(
-          wallet.utxos,
+          sortedUtxos,
           veilAppSpec,
           wallet.network
         );
@@ -351,8 +374,9 @@ export function useWallet(): UseWalletReturn {
           return merged;
         });
         
-        // Store badge UTXO mappings from discovered badges
+        // Store badge UTXO mappings and VKs from discovered badges
         const utxoMap = new Map<string, UtxoInfo>();
+        const vkMap = new Map<string, string>();
         for (const d of discovered) {
           // Skip badges without valid IDs
           if (!d.badge?.id) {
@@ -363,6 +387,11 @@ export function useWallet(): UseWalletReturn {
           const fullUtxo = wallet.utxos.find(u => u.txid === d.txid && u.vout === d.vout);
           if (fullUtxo) {
             utxoMap.set(d.badge.id, fullUtxo);
+          }
+          // Store the VK this badge was minted with (if discovered)
+          if (d.vk) {
+            logger.debug(`[refreshBadges] Badge ${d.badge.id.slice(0,8)} has VK ${d.vk.slice(0,8)}...`);
+            vkMap.set(d.badge.id, d.vk);
           }
         }
       
@@ -406,13 +435,15 @@ export function useWallet(): UseWalletReturn {
       });
       
       setBadgeUtxos(utxoMap);
+      setBadgeVks(vkMap);
       
-      // Log all entries in utxoMap
+      // Log all entries in utxoMap and vkMap
       for (const [badgeId, utxo] of utxoMap.entries()) {
-        logger.debug(`[refreshBadges] utxoMap entry: badge=${badgeId.slice(0,8)}, utxo=${utxo.txid.slice(0,8)}:${utxo.vout}`);
+        const vk = vkMap.get(badgeId);
+        logger.debug(`[refreshBadges] utxoMap entry: badge=${badgeId.slice(0,8)}, utxo=${utxo.txid.slice(0,8)}:${utxo.vout}, vk=${vk ? vk.slice(0,8) + '...' : 'unknown'}`);
       }
       
-      logger.debug('[Veil] Refreshed badges, found', discovered.length, 'utxoMap size:', utxoMap.size);
+      logger.debug('[Veil] Refreshed badges, found', discovered.length, 'utxoMap size:', utxoMap.size, 'vkMap size:', vkMap.size);
       } catch (err) {
         // Badge discovery errors are expected when UTXOs don't contain badges
         logger.warn('[Veil] Badge discovery error (this is normal if you have no badges):', err);

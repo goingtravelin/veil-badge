@@ -121,4 +121,7 @@ export interface UtxoInfo {
 export interface BadgeWithUtxo {
   badge: VeilBadge;
   utxo: UtxoInfo;
+  /** The verification key (VK) of the app that created this badge. 
+   *  Used to detect if migration is needed. */
+  vk?: string;
 }

@@ -51,6 +51,12 @@ export function TransactionsPage({
 
   const handleAccept = async (proposal: Proposal, signature: string): Promise<ActiveTransaction> => {
     logger.info('Accepting proposal:', proposal.id);
+    logger.info('myBadge.vk for accept:', myBadge.vk ? myBadge.vk.slice(0, 16) + '...' : 'UNDEFINED - will use default VK');
+    logger.info('Full myBadge object:', { 
+      badgeId: myBadge.badge.id.slice(0, 16),
+      utxo: `${myBadge.utxo.txid.slice(0, 8)}:${myBadge.utxo.vout}`,
+      vk: myBadge.vk || 'NOT SET'
+    });
     
     if (!wallet.address) {
       throw new Error('Wallet not connected');
@@ -73,6 +79,7 @@ export function TransactionsPage({
           myAddress: wallet.address,
           mySignature: signature,
           network: wallet.network,
+          acceptorVk: myBadge.vk, // Pass acceptor's VK for cross-version checking
         },
         {
           bitcoin: bitcoinService,
@@ -202,7 +209,7 @@ function TransactionInbox({
   return (
     <div className="space-y-4">
       {activeTransactions.map((tx) => {
-        const blocksRemaining = tx.windowEndsAt - currentBlock;
+        const blocksRemaining = tx.window_ends_at - currentBlock;
         const isExpired = blocksRemaining <= 0;
         
         return (
@@ -228,7 +235,7 @@ function TransactionInbox({
             
             <div className="text-sm text-gray-500">
               <p>ID: {tx.id.slice(0, 16)}...</p>
-              <p>Counterparty: {tx.counterpartyBadgeId.slice(0, 16)}...</p>
+              <p>Counterparty: {tx.counterparty_badge_id.slice(0, 16)}...</p>
               {!isExpired && (
                 <p className="text-blue-400">
                   {blocksRemaining} blocks remaining (~{Math.round(blocksRemaining * 10 / 60)} hours)

@@ -58,6 +58,7 @@ export const TEST_UTXOS = {
 // Factory for creating test badges
 export function createTestBadge(overrides: Partial<VeilBadge> = {}): VeilBadge {
   return {
+    schema_version: 1,
     id: TEST_BADGE_IDS.acceptor,
     created_at: 100000,
     pubkey: TEST_PUBKEYS.acceptor,
@@ -146,15 +147,15 @@ export function createActiveTransaction(
   
   return {
     id: proposal.id,
-    counterpartyBadgeId: iAmProposer
+    counterparty_badge_id: iAmProposer
       ? proposal.counterpartyBadgeId!
       : proposal.proposerBadgeId,
     value: proposal.value,
     category: proposal.category as TxCategory,
-    startedAt: currentBlock,
-    windowEndsAt,
-    reportDeadline,
-    iAmProposer,
+    started_at: currentBlock,
+    window_ends_at: windowEndsAt,
+    report_deadline: reportDeadline,
+    i_am_proposer: iAmProposer,
   };
 }
 
@@ -163,3 +164,40 @@ export const TEST_NETWORK: Network = 'testnet4';
 
 // Current block height for tests
 export const TEST_CURRENT_BLOCK = 117190;
+
+// Migration test fixtures
+export const TEST_VKS = {
+  current: '78cd7c1a0767d2ded75c5bf65795c68f44c97869c55c3e0a000a40cc384b6ee6',
+  previous: '4ff0aa793cf07f765dcb77ba7f54751eb62882a766b9e6ae787f7e5d6a3d99cc',
+  legacy: 'a1de11741b887c47d842611137ddb922188238c188b5d1fb433af9a05849c782',
+  unknown: 'ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+} as const;
+
+// Factory for legacy badge (schema_version 0)
+export function createLegacyBadge(overrides: Partial<VeilBadge> = {}): VeilBadge {
+  return {
+    ...createTestBadge(),
+    schema_version: 0,
+    ...overrides,
+  };
+}
+
+// Factory for badge needing migration (old VK)
+export function createBadgeNeedingMigration(): {
+  badge: VeilBadge;
+  utxo: UtxoInfo;
+  oldVk: string;
+} {
+  return {
+    badge: createTestBadge({
+      id: padHex('migration_badge_'),
+    }),
+    utxo: {
+      txid: padHex('migration_tx_'),
+      vout: 0,
+      value: 546,
+      scriptPubKey: '',
+    },
+    oldVk: TEST_VKS.previous,
+  };
+}

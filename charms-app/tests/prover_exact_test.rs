@@ -97,6 +97,7 @@ fn test_action_accept_proposal_json_to_cbor() {
 fn test_veilbadge_json_to_cbor() {
     // This is what the frontend sends as JSON for the badge charm data
     let badge_json = json!({
+        "schema_version": 1,
         "id": "0000000000000000000000000000000000000000000000000000000000000000",
         "created_at": 1000,
         "pubkey": "020000000000000000000000000000000000000000000000000000000000000001",

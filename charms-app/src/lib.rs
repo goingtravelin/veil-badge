@@ -89,16 +89,24 @@ pub fn app_contract(app: &App, tx: &Transaction, x: &Data, w: &Data) -> bool {
             category,
             window_blocks,
             report_window_blocks,
-            current_block
+            current_block,
         } => {
             handlers::handle_accept_proposal(
                 app, tx, proposal_id, proposer_badge_id, value, category,
-                window_blocks, report_window_blocks, current_block, false
+                window_blocks, report_window_blocks, current_block
             )
         }
 
         Action::ReportOutcome { transaction_id, outcome, current_block } => {
             handlers::handle_report_outcome(app, tx, transaction_id, outcome, current_block)
+        }
+
+        Action::MigrateOut => {
+            handlers::handle_migrate_out(app, tx)
+        }
+
+        Action::MigrateIn { from_vk } => {
+            handlers::handle_migrate_in(app, tx, from_vk)
         }
     }
 }

@@ -25,6 +25,7 @@ mod json_to_cbor_direct_test {
     fn test_json_to_cbor_direct_conversion() {
         // Badge JSON as the client sends it
         let badge_json = r#"{
+            "schema_version": 1,
             "id": "17174d5381653821041b8baa6f908de2d091c3154ba073f1b94053d84baf2d08",
             "created_at": 117197,
             "pubkey": "02c46a17827abc6e42b6df542ef3c30091630ae81b3115d29e037376287d086b33",
@@ -145,6 +146,7 @@ mod json_to_cbor_direct_test {
     #[test]
     fn test_badge_with_active_tx_json_to_cbor_direct() {
         let badge_json = r#"{
+            "schema_version": 1,
             "id": "17174d5381653821041b8baa6f908de2d091c3154ba073f1b94053d84baf2d08",
             "created_at": 117197,
             "pubkey": "02c46a17827abc6e42b6df542ef3c30091630ae81b3115d29e037376287d086b33",

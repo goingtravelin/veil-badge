@@ -105,7 +105,10 @@ export interface BackingAggregates {
   unbacked_volume: number;
 }
 
+export const SCHEMA_VERSION = 1;
+
 export interface VeilBadge {
+  schema_version: number;
 
   id: B32;
   created_at: BlockHeight;
@@ -240,6 +243,7 @@ export function createNewBadge(
   createdAt: BlockHeight
 ): VeilBadge {
   return {
+    schema_version: SCHEMA_VERSION,
     id,
     created_at: createdAt,
     pubkey,
@@ -267,12 +271,12 @@ export function createNewBadge(
     active_transactions: [],
     reporting_transactions: [],
     outcomes: {
-      mutualPositive: 0,
-      mutualNegative: 0,
-      contestedIPositive: 0,
-      contestedINegative: 0,
+      mutual_positive: 0,
+      mutual_negative: 0,
+      contested_i_positive: 0,
+      contested_i_negative: 0,
       timeout: 0,
-      mutualTimeout: 0,
+      mutual_timeout: 0,
     },
     last_nonce: '0'.repeat(64),
     last_update: createdAt,

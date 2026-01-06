@@ -14,12 +14,14 @@ pub fn handle_accept_proposal(
     window_blocks: u32,
     report_window_blocks: u32,
     current_block: u64,
-    is_proposer: bool,
 ) -> bool {
     let (old_badge, new_badge) = match extract_badge_transition(app, tx) {
         Some(badges) => badges,
         None => return false,
     };
+
+    // Derive is_proposer from badge ID - no need to pass as parameter
+    let is_proposer = old_badge.id == proposer_badge_id;
 
     validate_accept_proposal(
         &old_badge,
@@ -59,9 +61,15 @@ fn validate_accept_proposal(
     let window_ends_at = current_block.saturating_add(window_blocks as u64);
     let report_deadline = window_ends_at.saturating_add(report_window_blocks as u64);
 
+    // For proposer: counterparty is the acceptor (we don't know their ID here, check from new_badge)
+    // For acceptor: counterparty is the proposer
     let counterparty_badge_id = if is_proposer {
-
-        old_badge.id
+        // Get acceptor's badge ID from the active transaction in new_badge
+        // The proposer's counterparty is whoever accepted (not themselves)
+        match new_badge.active_transactions.iter().find(|tx| tx.id == proposal_id) {
+            Some(tx) => tx.counterparty_badge_id,
+            None => return false, // No active tx found
+        }
     } else {
         proposer_badge_id
     };

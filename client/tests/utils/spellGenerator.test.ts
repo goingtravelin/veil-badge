@@ -52,6 +52,7 @@ describe('generateAcceptProposalSpell', () => {
       proposerOldBadge: proposerBadge,
       proposerNewBadge: proposerUpdated,
       proposerAddress: TEST_ADDRESSES.proposer,
+      proposerVk: VEIL_APP_VK, // Required: proposer's VK from their on-chain badge
       proposalId: proposal.id,
       value: proposal.value,
       category: proposal.category,
@@ -100,7 +101,7 @@ describe('generateAcceptProposalSpell', () => {
     });
   });
 
-  describe('App Identity', () => {
+  describe('App Identity and VK', () => {
     it('should use proposer badge ID as $00 app identity', () => {
       const spell = generateAcceptProposalSpell(params);
       expect(spell).toContain(`n/${params.proposerOldBadge.id}/`);
@@ -109,6 +110,37 @@ describe('generateAcceptProposalSpell', () => {
     it('should use acceptor badge ID as $01 app identity', () => {
       const spell = generateAcceptProposalSpell(params);
       expect(spell).toContain(`n/${params.acceptorOldBadge.id}/`);
+    });
+
+    it('should use proposerVk for $00 app (not hardcoded VEIL_APP_VK)', () => {
+      // Test with a different VK for proposer
+      const differentVk = 'a'.repeat(64);
+      const paramsWithDifferentVk = {
+        ...params,
+        proposerVk: differentVk,
+      };
+      
+      const spell = generateAcceptProposalSpell(paramsWithDifferentVk);
+      
+      // $00 should have the different VK
+      expect(spell).toContain(`$00: "n/${params.proposerOldBadge.id}/${differentVk}"`);
+      // $01 should still use VEIL_APP_VK (acceptor's badge)
+      expect(spell).toContain(`$01: "n/${params.acceptorOldBadge.id}/${VEIL_APP_VK}"`);
+    });
+
+    it('should allow acceptorVk override', () => {
+      const proposerVk = 'a'.repeat(64);
+      const acceptorVk = 'b'.repeat(64);
+      const paramsWithBothVks = {
+        ...params,
+        proposerVk,
+        acceptorVk,
+      };
+      
+      const spell = generateAcceptProposalSpell(paramsWithBothVks);
+      
+      expect(spell).toContain(`$00: "n/${params.proposerOldBadge.id}/${proposerVk}"`);
+      expect(spell).toContain(`$01: "n/${params.acceptorOldBadge.id}/${acceptorVk}"`);
     });
   });
 

@@ -8,10 +8,6 @@
 /client/dist/
 /client/build/
 
-/client/server/node_modules/
-/client/server/dist/
-/client/server/build/
-
 # Dependencies
 npm-debug.log*
 yarn-debug.log*
@@ -57,9 +53,6 @@ Thumbs.db
 # Charms-specific
 /charms-app/Cargo.lock
 /client/.vite/
-
-/client/server/package-lock.json
-/client/server/.vite/
 
 # Charms WASM - Allow committed files
 # /client/public/wasm/*.wasm

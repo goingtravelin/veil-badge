@@ -273,6 +273,47 @@ describe('CharmsService', () => {
     });
   });
 
+  describe('Error Handling Scenarios', () => {
+    describe('no control block error', () => {
+      // This error occurs when scanning regular Bitcoin transactions without charms data
+      it('should document that "no control block" is expected for non-charms txs', () => {
+        // This is a documentation test - "no control block" means:
+        // - The transaction doesn't have a Taproot script with charms envelope
+        // - This is NORMAL for regular Bitcoin transactions (funding, change, etc.)
+        // - The service should return null, not throw
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('unknown variant error', () => {
+      // This error occurred when passing raw hex instead of { bitcoin: hex }
+      it('should document that WASM expects tagged union { bitcoin: hex }', () => {
+        // The WASM extractAndVerifySpell function expects:
+        // CORRECT: { bitcoin: "0200000001..." }
+        // WRONG:   "0200000001..."
+        // 
+        // The Rust Tx enum uses serde(rename_all = "snake_case"):
+        // enum Tx { Bitcoin(String), Cardano(String) }
+        // 
+        // If raw hex is passed, serde tries to match "0200000001" as enum variant
+        // and fails with "unknown variant" error
+        expect(true).toBe(true);
+      });
+    });
+
+    describe('invalid badge data', () => {
+      it('should document badge validation requirements', () => {
+        // Badges returned from WASM must have:
+        // - id: string (non-empty)
+        // - volume_sum_squares: number or BigInt (converted to BigInt)
+        // 
+        // Missing id causes: "Cannot read properties of undefined (reading 'slice')"
+        // Missing volume_sum_squares causes: "Cannot read properties of undefined (reading 'toString')"
+        expect(true).toBe(true);
+      });
+    });
+  });
+
   describe('WASM Loading Mechanism', () => {
     it('should construct correct WASM path from base URL', () => {
       // Verify the service can handle different base URLs

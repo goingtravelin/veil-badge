@@ -96,16 +96,22 @@ function loadPersistedBadges(): VeilBadge[] {
 
 function persistBadges(badges: VeilBadge[]): void {
   try {
-    // Deduplicate badges by ID before persisting
+    // Deduplicate badges by ID before persisting, filtering out invalid badges
     const badgeMap = new Map<string, VeilBadge>();
     for (const badge of badges) {
+      // Skip badges without valid IDs
+      if (!badge?.id || typeof badge.id !== 'string') {
+        logger.warn('[Veil] Skipping badge with invalid id during persistence:', badge);
+        continue;
+      }
       badgeMap.set(badge.id, badge);
     }
     const uniqueBadges = Array.from(badgeMap.values());
     
     const serializable = uniqueBadges.map((b) => ({
       ...b,
-      volume_sum_squares: b.volume_sum_squares.toString(),
+      // Safely convert volume_sum_squares, defaulting to "0" if undefined
+      volume_sum_squares: (b.volume_sum_squares ?? BigInt(0)).toString(),
     }));
     localStorage.setItem(BADGES_STORAGE_KEY, JSON.stringify(serializable));
   } catch (err) {
@@ -338,6 +344,11 @@ export function useWallet(): UseWalletReturn {
       // Store badge UTXO mappings from discovered badges
       const utxoMap = new Map<string, UtxoInfo>();
       for (const d of discovered) {
+        // Skip badges without valid IDs
+        if (!d.badge?.id) {
+          logger.warn('[refreshBadges] Skipping discovered badge with missing id');
+          continue;
+        }
         // Find the full UTXO info from wallet UTXOs
         const fullUtxo = wallet.utxos.find(u => u.txid === d.txid && u.vout === d.vout);
         if (fullUtxo) {
@@ -350,6 +361,11 @@ export function useWallet(): UseWalletReturn {
       setBadges(prev => {
         logger.debug(`[refreshBadges] Processing ${prev.length} badges for stored UTXOs`);
         for (const badge of prev) {
+          // Skip badges without valid IDs
+          if (!badge?.id) {
+            logger.warn('[refreshBadges] Skipping badge with missing id');
+            continue;
+          }
           logger.debug(`[refreshBadges] Badge ${badge.id.slice(0,8)} - utxoMap.has=${utxoMap.has(badge.id)}, badge.utxo=${badge.utxo ? `${badge.utxo.txid.slice(0,8)}:${badge.utxo.vout}` : 'none'}`);
           if (!utxoMap.has(badge.id) && badge.utxo) {
             // Badge has stored UTXO info - look for it in wallet UTXOs

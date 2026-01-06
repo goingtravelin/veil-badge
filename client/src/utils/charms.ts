@@ -119,5 +119,17 @@ export function extractVeilBadge(
   const charmData = outputMap.get(appIndex);
   if (!charmData || typeof charmData !== 'object') return null;
 
-  return charmData as VeilBadge;
+  // Validate that the object has required VeilBadge properties
+  const badge = charmData as Record<string, unknown>;
+  if (typeof badge.id !== 'string' || !badge.id) {
+    console.warn('[extractVeilBadge] Invalid badge: missing or invalid id', badge);
+    return null;
+  }
+
+  // Ensure volume_sum_squares is a BigInt (WASM may return number or BigInt)
+  if (badge.volume_sum_squares !== undefined) {
+    badge.volume_sum_squares = BigInt(badge.volume_sum_squares as number | bigint);
+  }
+
+  return badge as unknown as VeilBadge;
 }

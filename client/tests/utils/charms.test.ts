@@ -8,6 +8,7 @@ import {
   hasVeilBadge,
   parseAppSpec,
   buildAppSpec,
+  findFirstNftAppSpec,
   type ParsedSpell,
 } from '../../src/utils/charms';
 import { VEIL_APP_VK, VEIL_APP_IDENTITY } from '../../src/domain';
@@ -275,6 +276,57 @@ describe('hasVeilBadge', () => {
     // Different identity, same VK
     spell.app_public_inputs = new Map([[`n/differentidentity/${VEIL_APP_VK}`, {}]]);
     expect(hasVeilBadge(spell, veilAppId)).toBe(true);
+  });
+});
+
+describe('findFirstNftAppSpec', () => {
+  it('should find first NFT app spec', () => {
+    const spell = createMockSpell();
+    const result = findFirstNftAppSpec(spell);
+    expect(result).toBe(`n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`);
+  });
+
+  it('should find NFT with any identity and VK', () => {
+    const spell = createMockSpell();
+    const differentIdentity = 'c'.repeat(64);
+    const differentVk = 'd'.repeat(64);
+    spell.app_public_inputs = new Map([[`n/${differentIdentity}/${differentVk}`, {}]]);
+    
+    const result = findFirstNftAppSpec(spell);
+    expect(result).toBe(`n/${differentIdentity}/${differentVk}`);
+  });
+
+  it('should return null for spell without app_public_inputs', () => {
+    const spell = { version: 8, tx: { ins: [], outs: [] } } as ParsedSpell;
+    expect(findFirstNftAppSpec(spell)).toBeNull();
+  });
+
+  it('should return null for null spell', () => {
+    expect(findFirstNftAppSpec(null as unknown as ParsedSpell)).toBeNull();
+  });
+
+  it('should skip token apps (tag t) and find NFT', () => {
+    const spell = createMockSpell();
+    const tokenSpec = `t/${'e'.repeat(64)}/${'f'.repeat(64)}`;
+    const nftSpec = `n/${'a'.repeat(64)}/${'b'.repeat(64)}`;
+    spell.app_public_inputs = new Map([
+      [tokenSpec, {}],
+      [nftSpec, {}],
+    ]);
+    
+    const result = findFirstNftAppSpec(spell);
+    expect(result).toBe(nftSpec);
+  });
+
+  it('should return null if no valid NFT app found', () => {
+    const spell = createMockSpell();
+    spell.app_public_inputs = new Map([
+      ['invalid', {}],
+      [`t/${'a'.repeat(64)}/${'b'.repeat(64)}`, {}], // token, not NFT
+    ]);
+    
+    const result = findFirstNftAppSpec(spell);
+    expect(result).toBeNull();
   });
 });
 

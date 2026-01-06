@@ -19,7 +19,6 @@ import { generateAcceptProposalSpell } from '../utils/spellGenerator';
 import { createLogger } from '../utils/logger';
 import { selectFundingUtxo } from '../domain/bitcoin';
 import { charmsService } from '../services/CharmsService';
-import { VEIL_APP_IDENTITY, VEIL_APP_VK } from '../domain';
 
 const logger = createLogger('acceptProposal');
 
@@ -101,14 +100,13 @@ export async function acceptProposal(
     onProgress?.('Fetching proposer badge...');
 
     // Fetch proposer's badge from their UTXO using CharmsService
+    // Use scanUtxoForAnyBadge since proposer may have minted with a different VK version
     const proposerBadgeUtxo = proposal.proposerBadgeUtxo;
     logger.debug('Fetching proposer badge from UTXO:', `${proposerBadgeUtxo.txid.slice(0, 8)}:${proposerBadgeUtxo.vout}`);
     
-    const veilAppSpec = `n/${VEIL_APP_IDENTITY}/${VEIL_APP_VK}`;
-    const proposerBadge = await charmsService.scanUtxoForBadge(
+    const proposerBadge = await charmsService.scanUtxoForAnyBadge(
       proposerBadgeUtxo.txid,
       proposerBadgeUtxo.vout,
-      veilAppSpec,
       network
     );
 

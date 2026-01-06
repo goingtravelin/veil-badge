@@ -10,7 +10,7 @@
 import type { VeilBadge } from '../domain/types';
 import type { Network } from '../application/ports';
 import { createBitcoinService } from './BitcoinService';
-import { hasVeilBadge, extractVeilBadge } from '../utils/charms';
+import { hasVeilBadge, extractVeilBadge, findFirstNftAppSpec } from '../utils/charms';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('CharmsService');
@@ -238,6 +238,49 @@ export class WasmCharmsService implements ICharmsService {
 
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn('Error scanning UTXO', txid.slice(0, 8), ':', errorMsg.slice(0, 100));
+      return null;
+    }
+  }
+
+  /**
+   * Scan a UTXO for ANY NFT badge (regardless of VK).
+   * Use this when fetching a counterparty's badge that may have been minted with a different VK.
+   */
+  async scanUtxoForAnyBadge(
+    txid: string,
+    vout: number,
+    network: Network
+  ): Promise<VeilBadge | null> {
+    try {
+      const bitcoinService = createBitcoinService('mempool');
+      const txHex = await bitcoinService.fetchTransaction(txid, network);
+      logger.debug(`[scanUtxoAny] Scanning ${txid.slice(0,8)}:${vout}`);
+
+      const spell = await this.extractAndVerifySpell(txHex, false);
+      if (!spell) {
+        logger.debug(`[scanUtxoAny] No spell found in ${txid.slice(0,8)}`);
+        return null;
+      }
+      
+      logger.debug(`[scanUtxoAny] Spell found! outs=${spell.tx.outs.length}, app_public_inputs keys:`, 
+        spell.app_public_inputs ? [...spell.app_public_inputs.keys()] : 'none');
+
+      // Find ANY NFT app spec in this spell
+      const nftAppSpec = findFirstNftAppSpec(spell);
+      if (!nftAppSpec) {
+        logger.debug(`[scanUtxoAny] No NFT app found in spell`);
+        return null;
+      }
+      
+      logger.debug(`[scanUtxoAny] Found NFT app: ${nftAppSpec.slice(0, 20)}...`);
+
+      // Extract badge using the found app spec
+      const badge = extractVeilBadge(spell, nftAppSpec, vout);
+      logger.debug(`[scanUtxoAny] extractVeilBadge returned:`, badge);
+      return badge;
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.warn('Error scanning UTXO (any badge)', txid.slice(0, 8), ':', errorMsg.slice(0, 100));
       return null;
     }
   }

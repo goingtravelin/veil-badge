@@ -53,6 +53,23 @@ export function buildAppSpec(app: CharmsApp): string {
   return `${app.tag}/${app.identity}/${app.vk}`;
 }
 
+/**
+ * Find the first NFT app spec in the spell (any VK)
+ * Used when we need to extract a badge but don't know/care which VK it uses
+ */
+export function findFirstNftAppSpec(spell: ParsedSpell): string | null {
+  if (!spell?.app_public_inputs) return null;
+
+  for (const [appSpec] of spell.app_public_inputs) {
+    const parts = appSpec.split('/');
+    // Must be NFT (tag 'n') with valid 64-char identity and vk
+    if (parts.length === 3 && parts[0] === 'n' && parts[1].length === 64 && parts[2].length === 64) {
+      return appSpec;
+    }
+  }
+  return null;
+}
+
 export function hasVeilBadge(spell: ParsedSpell, veilAppId: string): boolean {
   if (!spell?.app_public_inputs) return false;
 

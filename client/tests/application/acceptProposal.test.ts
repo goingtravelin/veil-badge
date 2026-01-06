@@ -26,6 +26,7 @@ import {
 vi.mock('../../src/services/CharmsService', () => ({
   charmsService: {
     scanUtxoForBadge: vi.fn(),
+    scanUtxoForAnyBadge: vi.fn(),
   },
 }));
 
@@ -44,8 +45,8 @@ describe('Atomic AcceptProposal Use Case', () => {
     // Create proposer badge for mock response
     proposerBadge = createProposerBadge();
 
-    // Mock CharmsService to return proposer badge
-    vi.mocked(charmsService.scanUtxoForBadge).mockResolvedValue(proposerBadge);
+    // Mock CharmsService to return proposer badge (uses scanUtxoForAnyBadge for cross-VK compatibility)
+    vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue(proposerBadge);
 
     // Create context with all mocks
     ctx = {
@@ -84,16 +85,16 @@ describe('Atomic AcceptProposal Use Case', () => {
     it('should fetch proposer badge from UTXO', async () => {
       await acceptProposal(input, ctx);
 
-      expect(charmsService.scanUtxoForBadge).toHaveBeenCalledWith(
+      // scanUtxoForAnyBadge is used for cross-VK compatibility
+      expect(charmsService.scanUtxoForAnyBadge).toHaveBeenCalledWith(
         TEST_UTXOS.proposerBadge.txid,
         TEST_UTXOS.proposerBadge.vout,
-        expect.stringContaining('n/'),
         'testnet4'
       );
     });
 
     it('should fail if proposer badge not found', async () => {
-      vi.mocked(charmsService.scanUtxoForBadge).mockResolvedValue(null);
+      vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue(null);
 
       const result = await acceptProposal(input, ctx);
 
@@ -103,7 +104,7 @@ describe('Atomic AcceptProposal Use Case', () => {
 
     it('should fail if proposer badge ID mismatches', async () => {
       const wrongBadge = createProposerBadge({ id: 'wrong_badge_id'.padEnd(64, '0') });
-      vi.mocked(charmsService.scanUtxoForBadge).mockResolvedValue(wrongBadge);
+      vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue(wrongBadge);
 
       const result = await acceptProposal(input, ctx);
 
@@ -284,7 +285,7 @@ describe('Atomic AcceptProposal Use Case', () => {
     });
 
     it('should handle CharmsService errors gracefully', async () => {
-      vi.mocked(charmsService.scanUtxoForBadge).mockRejectedValue(
+      vi.mocked(charmsService.scanUtxoForAnyBadge).mockRejectedValue(
         new Error('Network error')
       );
 

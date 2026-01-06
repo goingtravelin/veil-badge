@@ -199,6 +199,58 @@ public_args:
   return spell;
 }
 
+export interface MigrateBadgeSpellParams {
+  badgeUtxo: UtxoInfo;
+  badge: VeilBadge;
+  oldVk: string;
+  newVk: string;
+  destinationAddress: string;
+}
+
+export function generateMigrateBadgeSpell(params: MigrateBadgeSpellParams): string {
+  const { badgeUtxo, badge, oldVk, newVk, destinationAddress } = params;
+
+  logger.info('Generating MigrateBadge spell:', {
+    badgeId: badge.id.slice(0, 16),
+    oldVk: oldVk.slice(0, 16),
+    newVk: newVk.slice(0, 16),
+  });
+
+  const badgeYaml = serializeBadgeStateYaml(badge);
+  const badgeId = badge.id;
+
+  // Migration spell has two apps: old VK (MigrateOut) and new VK (MigrateIn)
+  const spell = `version: 8
+
+apps:
+  $00: "n/${badgeId}/${oldVk}"
+  $01: "n/${badgeId}/${newVk}"
+
+ins:
+  - utxo_id: "${badgeUtxo.txid}:${badgeUtxo.vout}"
+    charms:
+      $00:
+${badgeYaml}
+
+outs:
+  - address: "${destinationAddress}"
+    sats: ${DUST_LIMIT_SATS}
+    charms:
+      $01:
+${badgeYaml}
+
+public_args:
+  $00:
+    MigrateOut: {}
+  $01:
+    MigrateIn:
+      from_vk: "${oldVk}"
+`;
+
+  logger.debug('Generated MigrateBadge spell YAML');
+  return spell;
+}
+
 /**
  * Serialize badge state as indented YAML (for embedding in spell)
  * Each line indented 8 spaces to fit under $00:

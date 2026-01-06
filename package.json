@@ -1,0 +1,18 @@
+{
+  "name": "veil-badge",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "wasm:build": "cd charms-app && cargo build --release --target wasm32-wasip1",
+    "wasm:sync": "node scripts/sync-wasm.mjs",
+    "wasm:sync:skip-build": "node scripts/sync-wasm.mjs --skip-build",
+    "wasm:sync:dry-run": "node scripts/sync-wasm.mjs --dry-run",
+    "wasm:archive": "cd charms-app && ./archive-wasm.sh",
+    "dev": "npm run wasm:sync:skip-build && cd client && npm run dev",
+    "build": "npm run wasm:sync && cd client && npm run build",
+    "test": "cd client && npm test",
+    "deploy": "npm run build && cd client && npm run deploy"
+  },
+  "devDependencies": {}
+}

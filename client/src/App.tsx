@@ -106,8 +106,11 @@ function App() {
     }
   }, [wallet.connected, refreshBadges]);
 
+  // Don't redirect away from transactions if there's a proposal deep link
+  // The badge discovery takes time, and we don't want to lose the deep link
   useEffect(() => {
-    if (wallet.connected && !hasBadge && view !== 'dashboard') {
+    const hasProposalLink = window.location.search.includes('proposal=');
+    if (wallet.connected && !hasBadge && view !== 'dashboard' && !hasProposalLink) {
       setView('dashboard');
     }
   }, [wallet.connected, hasBadge, view]);

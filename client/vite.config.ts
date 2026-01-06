@@ -5,7 +5,8 @@ import wasm from 'vite-plugin-wasm';
 import topLevelAwait from 'vite-plugin-top-level-await';
 
 export default defineConfig({
-  base: '/veil-badge/',
+  // Use /veil-badge/ for production (GitHub Pages), '/' for development
+  base: process.env.NODE_ENV === 'production' ? '/veil-badge/' : '/',
   plugins: [
     react(),
     wasm(),

@@ -13,6 +13,26 @@ export function clearBinaryCache(): void {
   cachedBinaries.clear();
 }
 
+/**
+ * Convert Uint8Array to base64 string safely.
+ * Uses a chunked approach to avoid stack overflow with large arrays.
+ */
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  // Use smaller chunks to avoid call stack issues with spread operator
+  const CHUNK_SIZE = 1024;
+  let binary = '';
+  
+  for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+    const chunk = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.length));
+    // Convert each byte individually to avoid spread operator issues
+    for (let j = 0; j < chunk.length; j++) {
+      binary += String.fromCharCode(chunk[j]);
+    }
+  }
+  
+  return btoa(binary);
+}
+
 async function loadWasmBinary(path: string): Promise<string> {
   const response = await fetch(`${import.meta.env.BASE_URL}${path}?v=${WASM_VERSION}`, {
     cache: 'no-store',
@@ -26,13 +46,18 @@ async function loadWasmBinary(path: string): Promise<string> {
 
   logger.info(`[AppBinary] Loaded WASM: ${bytes.length} bytes, first 4 bytes: ${bytes[0]},${bytes[1]},${bytes[2]},${bytes[3]}`);
 
-  let binary = '';
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode(...chunk);
+  // Verify WASM magic number (0x00 0x61 0x73 0x6d = "\0asm")
+  if (bytes.length < 4 || bytes[0] !== 0x00 || bytes[1] !== 0x61 || bytes[2] !== 0x73 || bytes[3] !== 0x6d) {
+    logger.error(`[AppBinary] Invalid WASM file - bad magic number: ${bytes[0]},${bytes[1]},${bytes[2]},${bytes[3]}`);
+    throw new Error('Invalid WASM file: missing magic number. File may be corrupted or wrong format.');
   }
-  return btoa(binary);
+
+  const base64 = uint8ArrayToBase64(bytes);
+  
+  // Log base64 info for debugging
+  logger.info(`[AppBinary] Base64 encoded: ${base64.length} chars, starts with: ${base64.substring(0, 20)}`);
+  
+  return base64;
 }
 
 export async function loadVeilAppBinary(forceReload = false): Promise<string> {

@@ -82,7 +82,6 @@ fn validate_accept_proposal(
         started_at: current_block as u32,
         window_ends_at: window_ends_at as u32,
         report_deadline: report_deadline as u32,
-        i_am_proposer: is_proposer,
     };
 
     let has_active_tx = new_badge.active_transactions.iter()

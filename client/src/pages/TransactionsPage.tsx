@@ -13,6 +13,9 @@ import { createBitcoinService, createProverService, createCryptoService, createS
 
 const logger = createLogger('TransactionsPage');
 
+// Key for storing pending proposal in localStorage (shared with App.tsx)
+const PENDING_PROPOSAL_KEY = 'veil_pending_proposal';
+
 interface TransactionsPageProps {
   myBadge: BadgeWithUtxo;
   currentBlock: number;
@@ -33,15 +36,40 @@ export function TransactionsPage({
   const [view, setView] = useState<View>('propose');
   const [incomingProposal, setIncomingProposal] = useState<Proposal | null>(null);
 
-  // Check URL for incoming proposal on mount
+  // Check URL for incoming proposal on mount (or localStorage if stored during login)
   useEffect(() => {
+    let proposal: Proposal | null = null;
+    
+    // First check URL
     const url = window.location.href;
-    const proposal = extractProposalFromUrl(url);
+    proposal = extractProposalFromUrl(url);
+    
+    // If not in URL, check localStorage (saved during login flow)
+    if (!proposal) {
+      const storedProposal = localStorage.getItem(PENDING_PROPOSAL_KEY);
+      if (storedProposal) {
+        logger.info('Found proposal in localStorage, decoding...');
+        try {
+          // The stored value is the base64 encoded proposal
+          const proposalJson = atob(storedProposal);
+          proposal = JSON.parse(proposalJson) as Proposal;
+          logger.info('Decoded proposal from localStorage:', proposal.id);
+        } catch (e) {
+          logger.error('Failed to decode stored proposal:', e);
+        }
+        // Clear it after reading
+        localStorage.removeItem(PENDING_PROPOSAL_KEY);
+      }
+    }
+    
     if (proposal) {
-      logger.info('Found proposal in URL:', proposal.id);
+      logger.info('Processing proposal:', proposal.id);
       setIncomingProposal(proposal);
       setView('accept');
-      window.history.replaceState({}, '', window.location.pathname);
+      // Clean URL if it had the proposal param
+      if (window.location.search.includes('proposal=')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
   }, []);
 

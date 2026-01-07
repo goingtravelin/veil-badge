@@ -1,6 +1,6 @@
 // Login Page - Seed phrase authentication
 
-import { Shield, Activity, Users, Loader2, Key, ArrowRight } from 'lucide-react';
+import { Shield, Activity, Users, Loader2, Key, ArrowRight, Bell } from 'lucide-react';
 import { hasSeedPhrase } from '../services/TaprootKeyService';
 
 interface LoginPageProps {
@@ -10,6 +10,7 @@ interface LoginPageProps {
   wasmReady: boolean;
   wasmError: string | null;
   walletError: string | null;
+  pendingProposal?: boolean;
 }
 
 export function LoginPage({
@@ -19,6 +20,7 @@ export function LoginPage({
   wasmReady,
   wasmError,
   walletError,
+  pendingProposal,
 }: LoginPageProps) {
   const hasSeed = hasSeedPhrase();
   return (
@@ -32,6 +34,23 @@ export function LoginPage({
           <h1 className="text-3xl font-bold mb-2">Veil</h1>
           <p className="text-gray-400 text-center">Anonymous Reputation Protocol</p>
         </div>
+
+        {/* Pending Proposal Banner */}
+        {pendingProposal && (
+          <div className="mb-6 p-4 bg-purple-900/30 border border-purple-700 rounded-xl">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-600/30 rounded-lg">
+                <Bell className="w-5 h-5 text-purple-400" />
+              </div>
+              <div>
+                <p className="text-purple-300 font-medium">Transaction Proposal Received!</p>
+                <p className="text-purple-400/70 text-sm">
+                  Import your seed phrase to view and accept this proposal.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* WASM Error */}
         {wasmError && (

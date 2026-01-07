@@ -109,9 +109,6 @@ export interface ActiveTransaction {
 
   /** Block height when reporting window ends (auto-timeout) */
   report_deadline: number;
-
-  /** Was I the one who proposed this transaction? */
-  i_am_proposer: boolean;
 }
 
 export interface ReportingTransaction {
@@ -132,9 +129,6 @@ export interface ReportingTransaction {
 
   /** What I reported (undefined = haven't reported yet) */
   my_report?: ReportedOutcome;
-
-  /** Was I the one who proposed this transaction? */
-  i_am_proposer: boolean;
 }
 
 export type SettledOutcome =

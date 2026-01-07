@@ -9,6 +9,7 @@ import {
   Outcome,
   TxType,
   BadgeWithUtxo,
+  RiskFlags,
 } from '../types';
 import { createWalletService, charmsService, createBitcoinService, createProverService, createCryptoService, createStorageService } from '../services';
 import { createLogger } from '../utils/logger';
@@ -80,14 +81,48 @@ const initialWalletState: WalletState = {
 
 const BADGES_STORAGE_KEY = 'veil_minted_badges';
 
+/**
+ * Convert RiskFlags object to number bitfield for storage
+ */
+function serializeRiskFlagsForStorage(flags: RiskFlags | number): number {
+  if (typeof flags === 'number') return flags;
+  
+  let bits = 0;
+  if (flags.acceleration) bits |= 0b00000001;
+  if (flags.extraction) bits |= 0b00000010;
+  if (flags.isolated) bits |= 0b00000100;
+  if (flags.too_clean) bits |= 0b00001000;
+  if (flags.erratic) bits |= 0b00010000;
+  if (flags.new_badge) bits |= 0b00100000;
+  return bits;
+}
+
+/**
+ * Convert number bitfield to RiskFlags object for runtime use
+ */
+function deserializeRiskFlags(flags: number | RiskFlags): RiskFlags {
+  if (typeof flags === 'object') return flags;
+  
+  return {
+    acceleration: (flags & 0b00000001) !== 0,
+    extraction: (flags & 0b00000010) !== 0,
+    isolated: (flags & 0b00000100) !== 0,
+    too_clean: (flags & 0b00001000) !== 0,
+    erratic: (flags & 0b00010000) !== 0,
+    new_badge: (flags & 0b00100000) !== 0,
+  };
+}
+
 function loadPersistedBadges(): VeilBadge[] {
   try {
     const stored = localStorage.getItem(BADGES_STORAGE_KEY);
     if (!stored) return [];
     const parsed = JSON.parse(stored);
-    return parsed.map((b: VeilBadge) => ({
+    return parsed.map((b: any) => ({
       ...b,
       volume_sum_squares: BigInt(b.volume_sum_squares || 0),
+      // Convert flags from number (storage format) back to object (runtime format)
+      flags: deserializeRiskFlags(b.flags),
     }));
   } catch {
     return [];
@@ -112,6 +147,8 @@ function persistBadges(badges: VeilBadge[]): void {
       ...b,
       // Safely convert volume_sum_squares, defaulting to "0" if undefined
       volume_sum_squares: (b.volume_sum_squares ?? BigInt(0)).toString(),
+      // Convert flags object to number for consistent storage
+      flags: serializeRiskFlagsForStorage(b.flags),
     }));
     localStorage.setItem(BADGES_STORAGE_KEY, JSON.stringify(serializable));
   } catch (err) {

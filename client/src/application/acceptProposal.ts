@@ -168,7 +168,6 @@ export async function acceptProposal(
       started_at: currentBlock,
       window_ends_at: windowEndsAt,
       report_deadline: reportDeadline,
-      i_am_proposer: false,
     };
 
     // For proposer, they see the inverse
@@ -180,7 +179,6 @@ export async function acceptProposal(
       started_at: currentBlock,
       window_ends_at: windowEndsAt,
       report_deadline: reportDeadline,
-      i_am_proposer: true,
     };
 
     // Create updated badges with active transactions added
@@ -299,7 +297,8 @@ export async function acceptProposal(
     onProgress?.('Proving transaction...');
 
     // Get funding UTXO's prev tx if different from both badge UTXOs
-    const prevTxs = [acceptorPrevTx, proposerPrevTx];
+    // Note: prev_txs order does not need to match spell inputs - prover matches by txid
+    const prevTxs = [proposerPrevTx, acceptorPrevTx];
     if (fundingUtxo.txid !== myBadgeUtxo.txid && fundingUtxo.txid !== proposerBadgeUtxo.txid) {
       logger.debug('Fetching funding prev tx:', fundingUtxo.txid.slice(0, 16));
       const fundingPrevTx = await bitcoin.fetchTransaction(fundingUtxo.txid, network);

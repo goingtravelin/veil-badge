@@ -93,7 +93,7 @@ export interface ActiveTransaction {
   id: B32;
 
   /** Badge ID of the counterparty */
-  counterpartyBadgeId: B32;
+  counterparty_badge_id: B32;
 
   /** Transaction value in satoshis */
   value: number;
@@ -102,16 +102,13 @@ export interface ActiveTransaction {
   category: TxCategory;
 
   /** Block height when both parties signed (acceptance) */
-  startedAt: number;
+  started_at: number;
 
   /** Block height when settlement window ends (reporting begins) */
-  windowEndsAt: number;
+  window_ends_at: number;
 
   /** Block height when reporting window ends (auto-timeout) */
-  reportDeadline: number;
-
-  /** Was I the one who proposed this transaction? */
-  iAmProposer: boolean;
+  report_deadline: number;
 }
 
 export interface ReportingTransaction {
@@ -119,7 +116,7 @@ export interface ReportingTransaction {
   id: B32;
 
   /** Badge ID of the counterparty */
-  counterpartyBadgeId: B32;
+  counterparty_badge_id: B32;
 
   /** Transaction value in satoshis */
   value: number;
@@ -128,13 +125,10 @@ export interface ReportingTransaction {
   category: TxCategory;
 
   /** Block height when reporting window ends */
-  reportDeadline: number;
+  report_deadline: number;
 
   /** What I reported (undefined = haven't reported yet) */
-  myReport?: ReportedOutcome;
-
-  /** Was I the one who proposed this transaction? */
-  iAmProposer: boolean;
+  my_report?: ReportedOutcome;
 }
 
 export type SettledOutcome =
@@ -208,65 +202,65 @@ export function getOutcomeTrustWeight(outcome: SettledOutcome): number {
 
 export interface OutcomeAggregates {
   /** Both parties said positive 👍👍 */
-  mutualPositive: number;
+  mutual_positive: number;
 
   /** Both parties said negative 👎👎 */
-  mutualNegative: number;
+  mutual_negative: number;
 
   /** I said positive, they said negative */
-  contestedIPositive: number;
+  contested_i_positive: number;
 
   /** I said negative, they said positive */
-  contestedINegative: number;
+  contested_i_negative: number;
 
   /** One party timed out */
   timeout: number;
 
   /** Both parties timed out */
-  mutualTimeout: number;
+  mutual_timeout: number;
 }
 
 export function createEmptyAggregates(): OutcomeAggregates {
   return {
-    mutualPositive: 0,
-    mutualNegative: 0,
-    contestedIPositive: 0,
-    contestedINegative: 0,
+    mutual_positive: 0,
+    mutual_negative: 0,
+    contested_i_positive: 0,
+    contested_i_negative: 0,
     timeout: 0,
-    mutualTimeout: 0,
+    mutual_timeout: 0,
   };
 }
 
 export function getComplaintRatio(agg: OutcomeAggregates): number | null {
-  const totalContested = agg.contestedIPositive + agg.contestedINegative;
+  const totalContested = agg.contested_i_positive + agg.contested_i_negative;
   if (totalContested === 0) return null;
-  return agg.contestedINegative / totalContested;
+  return agg.contested_i_negative / totalContested;
 }
 
 export function getTotalTransactions(agg: OutcomeAggregates): number {
   return (
-    agg.mutualPositive +
-    agg.mutualNegative +
-    agg.contestedIPositive +
-    agg.contestedINegative +
+    agg.mutual_positive +
+    agg.mutual_negative +
+    agg.contested_i_positive +
+    agg.contested_i_negative +
     agg.timeout +
-    agg.mutualTimeout
+    agg.mutual_timeout
   );
 }
 
 export function isInSettlementWindow(tx: ActiveTransaction, currentBlock: number): boolean {
-  return currentBlock < tx.windowEndsAt;
+  return currentBlock < tx.window_ends_at;
 }
 
 export function isInReportingPhase(tx: ActiveTransaction, currentBlock: number): boolean {
-  return currentBlock >= tx.windowEndsAt && currentBlock < tx.reportDeadline;
+  return currentBlock >= tx.window_ends_at && currentBlock < tx.report_deadline;
 }
 
 export function isPastDeadline(
   tx: ActiveTransaction | ReportingTransaction,
   currentBlock: number
 ): boolean {
-  return currentBlock >= tx.reportDeadline;
+  return currentBlock >= tx.report_deadline;
 }
 
 export function getBlocksRemaining(targetBlock: number, currentBlock: number): number {

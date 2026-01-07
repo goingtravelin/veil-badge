@@ -57,7 +57,8 @@ const VEIL_APP_CONFIG: SpellConfig = {
   appVk: VEIL_APP_VK, // Real verification key from compiled app
 };
 
-function buildMintSpellYaml(
+// Exported for testing
+export function buildMintSpellYaml(
   genesisUtxo: string,
   outputAddress: string,
   ownerPubkey: string,
@@ -84,6 +85,7 @@ outs:
     sats: ${CONSTANTS.DUST_LIMIT_SATS}
     charms:
       $00:
+        schema_version: 1
         id: "${badge.id}"
         created_at: ${badge.created_at}
         pubkey: "${badge.pubkey}"

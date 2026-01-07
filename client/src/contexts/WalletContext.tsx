@@ -41,6 +41,7 @@ interface WalletProviderProps {
 
 // Demo badge for demo mode
 const createDemoBadge = (): VeilBadge => ({
+  schema_version: 1,
   id: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f60001',
   created_at: 800000,
   pubkey: '02a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3',
@@ -78,12 +79,12 @@ const createDemoBadge = (): VeilBadge => ({
   active_transactions: [],
   reporting_transactions: [],
   outcomes: {
-    mutualPositive: 12,
-    mutualNegative: 1,
-    contestedIPositive: 2,
-    contestedINegative: 1,
+    mutual_positive: 12,
+    mutual_negative: 1,
+    contested_i_positive: 2,
+    contested_i_negative: 1,
     timeout: 0,
-    mutualTimeout: 0,
+    mutual_timeout: 0,
   },
   last_nonce: '0000000000000000000000000000000000000000000000000000000000000001',
   last_update: 856000,

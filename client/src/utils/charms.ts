@@ -7,7 +7,9 @@
 
 // use CharmsService from services/CharmsService.ts
 
-import type { VeilBadge, RiskFlags } from '../domain/types';
+import type { VeilBadge, RiskFlags, BackingAggregates } from '../domain/types';
+import type { OutcomeAggregates } from '../domain/proposal';
+import { createEmptyRiskFlags } from '../domain/types';
 
 export interface CharmsApp {
   tag: 'n' | 't';
@@ -179,6 +181,33 @@ export function extractVeilBadge(
   // Convert flags from bitfield number to RiskFlags object if needed
   if (typeof badge.flags === 'number') {
     badge.flags = decodeRiskFlags(badge.flags);
+  } else if (!badge.flags || typeof badge.flags !== 'object') {
+    badge.flags = createEmptyRiskFlags();
+  }
+
+  // Ensure backing aggregates exist with defaults (all snake_case)
+  const rawBacking = badge.backing as Record<string, unknown> | undefined;
+  badge.backing = {
+    backed_count: Number(rawBacking?.backed_count ?? 0),
+    unbacked_count: Number(rawBacking?.unbacked_count ?? 0),
+    backed_volume: Number(rawBacking?.backed_volume ?? 0),
+    unbacked_volume: Number(rawBacking?.unbacked_volume ?? 0),
+  } satisfies BackingAggregates;
+
+  // Ensure outcomes aggregates exist with defaults (all snake_case)
+  const rawOutcomes = badge.outcomes as Record<string, unknown> | undefined;
+  badge.outcomes = {
+    mutual_positive: Number(rawOutcomes?.mutual_positive ?? 0),
+    mutual_negative: Number(rawOutcomes?.mutual_negative ?? 0),
+    contested_i_positive: Number(rawOutcomes?.contested_i_positive ?? 0),
+    contested_i_negative: Number(rawOutcomes?.contested_i_negative ?? 0),
+    timeout: Number(rawOutcomes?.timeout ?? 0),
+    mutual_timeout: Number(rawOutcomes?.mutual_timeout ?? 0),
+  } satisfies OutcomeAggregates;
+
+  // Ensure schema_version exists
+  if (badge.schema_version === undefined) {
+    badge.schema_version = 1;
   }
 
   return badge as unknown as VeilBadge;

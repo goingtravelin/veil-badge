@@ -13,6 +13,9 @@ import { createBitcoinService, createProverService, createCryptoService, createS
 
 const logger = createLogger('TransactionsPage');
 
+// Key for storing pending proposal in localStorage (shared with App.tsx)
+const PENDING_PROPOSAL_KEY = 'veil_pending_proposal';
+
 interface TransactionsPageProps {
   myBadge: BadgeWithUtxo;
   currentBlock: number;
@@ -33,15 +36,40 @@ export function TransactionsPage({
   const [view, setView] = useState<View>('propose');
   const [incomingProposal, setIncomingProposal] = useState<Proposal | null>(null);
 
-  // Check URL for incoming proposal on mount
+  // Check URL for incoming proposal on mount (or localStorage if stored during login)
   useEffect(() => {
+    let proposal: Proposal | null = null;
+    
+    // First check URL
     const url = window.location.href;
-    const proposal = extractProposalFromUrl(url);
+    proposal = extractProposalFromUrl(url);
+    
+    // If not in URL, check localStorage (saved during login flow)
+    if (!proposal) {
+      const storedProposal = localStorage.getItem(PENDING_PROPOSAL_KEY);
+      if (storedProposal) {
+        logger.info('Found proposal in localStorage, decoding...');
+        try {
+          // The stored value is the base64 encoded proposal
+          const proposalJson = atob(storedProposal);
+          proposal = JSON.parse(proposalJson) as Proposal;
+          logger.info('Decoded proposal from localStorage:', proposal.id);
+        } catch (e) {
+          logger.error('Failed to decode stored proposal:', e);
+        }
+        // Clear it after reading
+        localStorage.removeItem(PENDING_PROPOSAL_KEY);
+      }
+    }
+    
     if (proposal) {
-      logger.info('Found proposal in URL:', proposal.id);
+      logger.info('Processing proposal:', proposal.id);
       setIncomingProposal(proposal);
       setView('accept');
-      window.history.replaceState({}, '', window.location.pathname);
+      // Clean URL if it had the proposal param
+      if (window.location.search.includes('proposal=')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
   }, []);
 
@@ -51,6 +79,12 @@ export function TransactionsPage({
 
   const handleAccept = async (proposal: Proposal, signature: string): Promise<ActiveTransaction> => {
     logger.info('Accepting proposal:', proposal.id);
+    logger.info('myBadge.vk for accept:', myBadge.vk ? myBadge.vk.slice(0, 16) + '...' : 'UNDEFINED - will use default VK');
+    logger.info('Full myBadge object:', { 
+      badgeId: myBadge.badge.id.slice(0, 16),
+      utxo: `${myBadge.utxo.txid.slice(0, 8)}:${myBadge.utxo.vout}`,
+      vk: myBadge.vk || 'NOT SET'
+    });
     
     if (!wallet.address) {
       throw new Error('Wallet not connected');
@@ -73,6 +107,7 @@ export function TransactionsPage({
           myAddress: wallet.address,
           mySignature: signature,
           network: wallet.network,
+          acceptorVk: myBadge.vk, // Pass acceptor's VK for cross-version checking
         },
         {
           bitcoin: bitcoinService,
@@ -202,7 +237,7 @@ function TransactionInbox({
   return (
     <div className="space-y-4">
       {activeTransactions.map((tx) => {
-        const blocksRemaining = tx.windowEndsAt - currentBlock;
+        const blocksRemaining = tx.window_ends_at - currentBlock;
         const isExpired = blocksRemaining <= 0;
         
         return (
@@ -228,7 +263,7 @@ function TransactionInbox({
             
             <div className="text-sm text-gray-500">
               <p>ID: {tx.id.slice(0, 16)}...</p>
-              <p>Counterparty: {tx.counterpartyBadgeId.slice(0, 16)}...</p>
+              <p>Counterparty: {tx.counterparty_badge_id.slice(0, 16)}...</p>
               {!isExpired && (
                 <p className="text-blue-400">
                   {blocksRemaining} blocks remaining (~{Math.round(blocksRemaining * 10 / 60)} hours)

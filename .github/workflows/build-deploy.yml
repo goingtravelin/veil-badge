@@ -1,0 +1,175 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  RUST_VERSION: '1.75'
+  NODE_VERSION: '20'
+
+jobs:
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    outputs:
+      vk: ${{ steps.vk.outputs.vk }}
+      vk_changed: ${{ steps.check.outputs.changed }}
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Rust
+        uses: dtolnay/rust-action@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: wasm32-wasip1
+      
+      - name: Cache Cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            charms-app/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('charms-app/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      
+      - name: Build WASM
+        working-directory: charms-app
+        run: cargo build --release --target wasm32-wasip1
+      
+      - name: Compute VK
+        id: vk
+        run: |
+          VK=$(sha256sum charms-app/target/wasm32-wasip1/release/veil.wasm | cut -d' ' -f1)
+          echo "vk=$VK" >> $GITHUB_OUTPUT
+          echo "📦 Built WASM with VK: $VK"
+      
+      - name: Check if VK changed
+        id: check
+        run: |
+          CURRENT_VK=$(grep "VEIL_APP_VK = " client/src/domain/charm.ts | grep -oP "[a-f0-9]{64}")
+          NEW_VK=${{ steps.vk.outputs.vk }}
+          if [ "$CURRENT_VK" = "$NEW_VK" ]; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "✅ VK unchanged"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "⚠️ VK changed: $CURRENT_VK → $NEW_VK"
+          fi
+      
+      - name: Upload WASM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: veil-wasm
+          path: charms-app/target/wasm32-wasip1/release/veil.wasm
+          retention-days: 7
+
+  sync-and-build:
+    name: Sync WASM & Build Client
+    needs: build-wasm
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      
+      - name: Download WASM artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: veil-wasm
+          path: client/public/wasm
+      
+      - name: Rename WASM
+        run: |
+          if [ -f "client/public/wasm/veil.wasm" ]; then
+            echo "✅ WASM already named correctly"
+          else
+            mv client/public/wasm/*.wasm client/public/wasm/veil.wasm
+          fi
+      
+      - name: Archive old WASM if VK changed
+        if: needs.build-wasm.outputs.vk_changed == 'true'
+        run: |
+          CURRENT_VK=$(grep "VEIL_APP_VK = " client/src/domain/charm.ts | grep -oP "[a-f0-9]{64}")
+          VK_PREFIX=${CURRENT_VK:0:16}
+          ARCHIVE_PATH="client/public/wasm/veil-${VK_PREFIX}.wasm"
+          
+          # Download the old WASM from the deployed site if it exists
+          # For now, we assume the archive already exists or we skip
+          echo "📦 Would archive VK $VK_PREFIX (manual step may be needed)"
+      
+      - name: Update VK in source files
+        if: needs.build-wasm.outputs.vk_changed == 'true'
+        run: |
+          NEW_VK=${{ needs.build-wasm.outputs.vk }}
+          CURRENT_VK=$(grep "VEIL_APP_VK = " client/src/domain/charm.ts | grep -oP "[a-f0-9]{64}")
+          
+          echo "Updating charm.ts: $CURRENT_VK → $NEW_VK"
+          
+          # Update VEIL_APP_VK
+          sed -i "s/VEIL_APP_VK = '[a-f0-9]\{64\}'/VEIL_APP_VK = '$NEW_VK'/" client/src/domain/charm.ts
+          
+          # Add old VK to VEIL_PREVIOUS_VKS (at the beginning)
+          sed -i "s/VEIL_PREVIOUS_VKS: string\[\] = \[/VEIL_PREVIOUS_VKS: string[] = [\n  '$CURRENT_VK',/" client/src/domain/charm.ts
+          
+          echo "✅ Updated charm.ts"
+      
+      - name: Install dependencies
+        working-directory: client
+        run: npm ci
+      
+      - name: Type check
+        working-directory: client
+        run: npm run typecheck || npx tsc --noEmit
+      
+      - name: Run tests
+        working-directory: client
+        run: npm test -- --run
+      
+      - name: Build client
+        working-directory: client
+        run: npm run build
+      
+      - name: Upload client build
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-dist
+          path: client/dist
+          retention-days: 7
+
+  deploy:
+    name: Deploy
+    needs: [build-wasm, sync-and-build]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+      - name: Download client build
+        uses: actions/download-artifact@v4
+        with:
+          name: client-dist
+          path: dist
+      
+      # Add your deployment steps here
+      # Examples:
+      # - Deploy to Vercel
+      # - Deploy to GitHub Pages
+      # - Deploy to AWS S3/CloudFront
+      
+      - name: Deploy placeholder
+        run: |
+          echo "📦 Ready to deploy!"
+          echo "Add your deployment provider here (Vercel, Netlify, GitHub Pages, etc.)"
+          ls -la dist/

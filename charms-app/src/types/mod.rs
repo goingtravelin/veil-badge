@@ -139,9 +139,13 @@ pub type PubKey = [u8; 33];
 
 pub type Signature = [u8; 64];
 
+pub const SCHEMA_VERSION: u8 = 1;
+
 #[serde_as]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct VeilBadge {
+    #[serde(default)]  // Missing field = 0 (legacy badges)
+    pub schema_version: u8,
     pub id: B32,
     pub created_at: u64,
     #[serde_as(as = "Hex")]
@@ -172,6 +176,7 @@ pub struct VeilBadge {
 impl Default for VeilBadge {
     fn default() -> Self {
         Self {
+            schema_version: SCHEMA_VERSION,
             id: B32::zero(),
             created_at: 0,
             pubkey: [0u8; 33],

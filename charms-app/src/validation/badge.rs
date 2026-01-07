@@ -28,6 +28,9 @@ pub fn validate_mint(
     new_badge: &VeilBadge,
     current_block: u64,
 ) -> bool {
+    // Validate schema version
+    check!(new_badge.schema_version == crate::types::SCHEMA_VERSION);
+
     // Validate identity
     let expected_id = super::compute_badge_id(genesis_utxo);
     check!(new_badge.id == expected_id);

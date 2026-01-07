@@ -537,6 +537,7 @@ fn test_vouch_target_too_low_trust_rejected() {
 fn make_badge_with_pubkey(current_block: u64, pubkey: PubKey, genesis_byte: u8) -> VeilBadge {
     let genesis = [genesis_byte; 32];
     VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: compute_badge_id(&genesis),
         created_at: current_block - NEW_BADGE_THRESHOLD_BLOCKS - 1000,
         pubkey,

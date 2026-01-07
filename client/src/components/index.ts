@@ -6,3 +6,4 @@ export { WalletFlyout } from './WalletFlyout';
 export { ProposeTransaction } from './ProposeTransaction';
 export { AcceptProposal } from './AcceptProposal';
 export { SeedPhraseManager } from './SeedPhraseManager';
+export { MigrationBanner } from './MigrationBanner';

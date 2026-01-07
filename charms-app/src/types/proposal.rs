@@ -202,8 +202,6 @@ pub struct ActiveTransaction {
     pub window_ends_at: u32,
 
     pub report_deadline: u32,
-
-    pub i_am_proposer: bool,
 }
 
 impl ActiveTransaction {
@@ -223,7 +221,6 @@ impl ActiveTransaction {
             started_at: current_block,
             window_ends_at,
             report_deadline,
-            i_am_proposer,
         }
     }
 
@@ -247,7 +244,6 @@ impl ActiveTransaction {
             category: self.category,
             report_deadline: self.report_deadline,
             my_report: None,
-            i_am_proposer: self.i_am_proposer,
         }
     }
 }
@@ -265,8 +261,6 @@ pub struct ReportingTransaction {
     pub report_deadline: u32,
 
     pub my_report: Option<ReportedOutcome>,
-
-    pub i_am_proposer: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

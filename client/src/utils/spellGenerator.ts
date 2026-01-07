@@ -20,12 +20,14 @@ export interface AcceptProposalSpellParams {
   acceptorOldBadge: VeilBadge;
   acceptorNewBadge: VeilBadge;
   acceptorAddress: string;
+  acceptorVk?: string; // Optional: VK for acceptor's badge (defaults to VEIL_APP_VK)
   
   // Proposer's badge
   proposerBadgeUtxo: UtxoInfo;
   proposerOldBadge: VeilBadge;
   proposerNewBadge: VeilBadge;
   proposerAddress: string;
+  proposerVk: string; // Required: VK discovered from proposer's on-chain badge
   
   // Transaction details
   proposalId: string;
@@ -42,10 +44,12 @@ export function generateAcceptProposalSpell(params: AcceptProposalSpellParams): 
     acceptorOldBadge,
     acceptorNewBadge,
     acceptorAddress,
+    acceptorVk,
     proposerBadgeUtxo,
     proposerOldBadge,
     proposerNewBadge,
     proposerAddress,
+    proposerVk,
     proposalId,
     value,
     category,
@@ -64,10 +68,12 @@ export function generateAcceptProposalSpell(params: AcceptProposalSpellParams): 
     category,
   });
 
-  // Both badges use their own app ID (genesis UTXO hash)
+  // Each badge uses its own app ID (genesis UTXO hash) and VK
   const proposerAppId = proposerOldBadge.id;
   const acceptorAppId = acceptorOldBadge.id;
-  const appVk = VEIL_APP_VK;
+  // Use passed-in VKs (proposerVk required, acceptorVk defaults to current VEIL_APP_VK)
+  const $00Vk = proposerVk;
+  const $01Vk = acceptorVk ?? VEIL_APP_VK;
 
   // Serialize badge states
   const proposerOldYaml = serializeBadgeStateYaml(proposerOldBadge);
@@ -78,8 +84,8 @@ export function generateAcceptProposalSpell(params: AcceptProposalSpellParams): 
   const spell = `version: 8
 
 apps:
-  $00: "n/${proposerAppId}/${appVk}"
-  $01: "n/${acceptorAppId}/${appVk}"
+  $00: "n/${proposerAppId}/${$00Vk}"
+  $01: "n/${acceptorAppId}/${$01Vk}"
 
 ins:
   # Input 0: Proposer's current badge
@@ -113,6 +119,7 @@ public_args:
   $00:
     AcceptProposal:
       proposal_id: "${proposalId}"
+      proposer_badge_id: "${proposerOldBadge.id}"
       value: ${value}
       category: ${category}
       window_blocks: ${windowBlocks}
@@ -121,6 +128,7 @@ public_args:
   $01:
     AcceptProposal:
       proposal_id: "${proposalId}"
+      proposer_badge_id: "${proposerOldBadge.id}"
       value: ${value}
       category: ${category}
       window_blocks: ${windowBlocks}
@@ -199,6 +207,58 @@ public_args:
   return spell;
 }
 
+export interface MigrateBadgeSpellParams {
+  badgeUtxo: UtxoInfo;
+  badge: VeilBadge;
+  oldVk: string;
+  newVk: string;
+  destinationAddress: string;
+}
+
+export function generateMigrateBadgeSpell(params: MigrateBadgeSpellParams): string {
+  const { badgeUtxo, badge, oldVk, newVk, destinationAddress } = params;
+
+  logger.info('Generating MigrateBadge spell:', {
+    badgeId: badge.id.slice(0, 16),
+    oldVk: oldVk.slice(0, 16),
+    newVk: newVk.slice(0, 16),
+  });
+
+  const badgeYaml = serializeBadgeStateYaml(badge);
+  const badgeId = badge.id;
+
+  // Migration spell has two apps: old VK (MigrateOut) and new VK (MigrateIn)
+  const spell = `version: 8
+
+apps:
+  $00: "n/${badgeId}/${oldVk}"
+  $01: "n/${badgeId}/${newVk}"
+
+ins:
+  - utxo_id: "${badgeUtxo.txid}:${badgeUtxo.vout}"
+    charms:
+      $00:
+${badgeYaml}
+
+outs:
+  - address: "${destinationAddress}"
+    sats: ${DUST_LIMIT_SATS}
+    charms:
+      $01:
+${badgeYaml}
+
+public_args:
+  $00:
+    MigrateOut: {}
+  $01:
+    MigrateIn:
+      from_vk: "${oldVk}"
+`;
+
+  logger.debug('Generated MigrateBadge spell YAML');
+  return spell;
+}
+
 /**
  * Serialize badge state as indented YAML (for embedding in spell)
  * Each line indented 8 spaces to fit under $00:
@@ -206,7 +266,16 @@ public_args:
 function serializeBadgeStateYaml(badge: VeilBadge): string {
   const indent = '        '; // 8 spaces
   
+  // Ensure volume_sum_squares is a number (handle BigInt, string, or number)
+  // This is critical because Rust expects u128, which requires numeric JSON
+  const volumeSumSquares = typeof badge.volume_sum_squares === 'bigint'
+    ? Number(badge.volume_sum_squares)
+    : typeof badge.volume_sum_squares === 'string'
+      ? Number(badge.volume_sum_squares)
+      : badge.volume_sum_squares ?? 0;
+  
   const lines = [
+    `schema_version: ${badge.schema_version ?? 1}`,
     `id: "${badge.id}"`,
     `created_at: ${badge.created_at}`,
     `pubkey: "${badge.pubkey}"`,
@@ -214,7 +283,7 @@ function serializeBadgeStateYaml(badge: VeilBadge): string {
     `tx_positive: ${badge.tx_positive}`,
     `tx_negative: ${badge.tx_negative}`,
     `volume_total: ${badge.volume_total}`,
-    `volume_sum_squares: ${badge.volume_sum_squares}`,
+    `volume_sum_squares: ${volumeSumSquares}`,
     `window_tx_count: ${badge.window_tx_count}`,
     `window_volume: ${badge.window_volume}`,
     `window_start: ${badge.window_start}`,
@@ -230,12 +299,12 @@ function serializeBadgeStateYaml(badge: VeilBadge): string {
     `active_transactions: ${serializeActiveTransactionsYaml(badge.active_transactions)}`,
     `reporting_transactions: ${serializeReportingTransactionsYaml(badge.reporting_transactions)}`,
     `outcomes:`,
-    `  mutual_positive: ${badge.outcomes.mutualPositive}`,
-    `  mutual_negative: ${badge.outcomes.mutualNegative}`,
-    `  contested_i_positive: ${badge.outcomes.contestedIPositive}`,
-    `  contested_i_negative: ${badge.outcomes.contestedINegative}`,
-    `  timeout: ${badge.outcomes.timeout}`,
-    `  mutual_timeout: ${badge.outcomes.mutualTimeout}`,
+    `  mutual_positive: ${badge.outcomes.mutual_positive ?? 0}`,
+    `  mutual_negative: ${badge.outcomes.mutual_negative ?? 0}`,
+    `  contested_i_positive: ${badge.outcomes.contested_i_positive ?? 0}`,
+    `  contested_i_negative: ${badge.outcomes.contested_i_negative ?? 0}`,
+    `  timeout: ${badge.outcomes.timeout ?? 0}`,
+    `  mutual_timeout: ${badge.outcomes.mutual_timeout ?? 0}`,
     `trust: ${badge.trust}`,
     `risk: ${badge.risk}`,
     `flags: ${serializeRiskFlags(badge.flags)}`,
@@ -257,7 +326,7 @@ function serializeVouchesYaml(vouches: VeilBadge['vouches_out']): string {
 function serializeActiveTransactionsYaml(txs: ActiveTransaction[]): string {
   if (txs.length === 0) return '[]';
   const items = txs.map(tx => 
-    `{ id: "${tx.id}", counterparty_badge_id: "${tx.counterpartyBadgeId}", value: ${tx.value}, category: "${tx.category}", started_at: ${tx.startedAt}, window_ends_at: ${tx.windowEndsAt}, report_deadline: ${tx.reportDeadline}, i_am_proposer: ${tx.iAmProposer} }`
+    `{ id: "${tx.id}", counterparty_badge_id: "${tx.counterparty_badge_id}", value: ${tx.value}, category: "${tx.category}", started_at: ${tx.started_at}, window_ends_at: ${tx.window_ends_at}, report_deadline: ${tx.report_deadline} }`
   );
   return `[${items.join(', ')}]`;
 }
@@ -265,12 +334,18 @@ function serializeActiveTransactionsYaml(txs: ActiveTransaction[]): string {
 function serializeReportingTransactionsYaml(txs: ReportingTransaction[]): string {
   if (txs.length === 0) return '[]';
   const items = txs.map(tx => 
-    `{ id: "${tx.id}", counterparty_badge_id: "${tx.counterpartyBadgeId}", value: ${tx.value}, category: "${tx.category}", report_deadline: ${tx.reportDeadline}, my_report: ${tx.myReport ? `"${tx.myReport}"` : 'null'}, i_am_proposer: ${tx.iAmProposer} }`
+    `{ id: "${tx.id}", counterparty_badge_id: "${tx.counterparty_badge_id}", value: ${tx.value}, category: "${tx.category}", report_deadline: ${tx.report_deadline}, my_report: ${tx.my_report ? `"${tx.my_report}"` : 'null'} }`
   );
   return `[${items.join(', ')}]`;
 }
 
-function serializeRiskFlags(flags: VeilBadge['flags']): number {
+function serializeRiskFlags(flags: VeilBadge['flags'] | number): number {
+  // Handle case where flags is already a number (from localStorage or JSON)
+  if (typeof flags === 'number') {
+    return flags;
+  }
+  
+  // Convert object form to bitfield
   let bits = 0;
   if (flags.acceleration) bits |= 0b00000001;
   if (flags.extraction) bits |= 0b00000010;

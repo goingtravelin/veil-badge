@@ -21,12 +21,14 @@ import {
   createProposerBadge,
   createTestProposal,
 } from '../fixtures';
+import { VEIL_APP_VK } from '../../src/domain';
 
 // Mock the CharmsService module
 vi.mock('../../src/services/CharmsService', () => ({
   charmsService: {
     scanUtxoForBadge: vi.fn(),
     scanUtxoForAnyBadge: vi.fn(),
+    isReady: vi.fn().mockReturnValue(true),
   },
 }));
 
@@ -45,8 +47,13 @@ describe('Atomic AcceptProposal Use Case', () => {
     // Create proposer badge for mock response
     proposerBadge = createProposerBadge();
 
-    // Mock CharmsService to return proposer badge (uses scanUtxoForAnyBadge for cross-VK compatibility)
-    vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue(proposerBadge);
+    // Mock CharmsService to return proposer badge with app spec
+    // Uses scanUtxoForAnyBadge which returns BadgeWithAppSpec
+    vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue({
+      badge: proposerBadge,
+      appSpec: `n/${proposerBadge.id}/${VEIL_APP_VK}`,
+      vk: VEIL_APP_VK,
+    });
 
     // Create context with all mocks
     ctx = {
@@ -104,7 +111,11 @@ describe('Atomic AcceptProposal Use Case', () => {
 
     it('should fail if proposer badge ID mismatches', async () => {
       const wrongBadge = createProposerBadge({ id: 'wrong_badge_id'.padEnd(64, '0') });
-      vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue(wrongBadge);
+      vi.mocked(charmsService.scanUtxoForAnyBadge).mockResolvedValue({
+        badge: wrongBadge,
+        appSpec: `n/${wrongBadge.id}/${VEIL_APP_VK}`,
+        vk: VEIL_APP_VK,
+      });
 
       const result = await acceptProposal(input, ctx);
 
@@ -146,18 +157,6 @@ describe('Atomic AcceptProposal Use Case', () => {
       expect(spellYaml).toContain('$00:');
       expect(spellYaml).toContain('$01:');
       expect(spellYaml).toContain('AcceptProposal:');
-    });
-
-    it('should set correct iAmProposer flags in active transactions', async () => {
-      await acceptProposal(input, ctx);
-
-      const proveCall = vi.mocked(ctx.prover.prove).mock.calls[0][0];
-      const spellYaml = proveCall.spellYaml;
-
-      // Proposer badge should have iAmProposer: true
-      // Acceptor badge should have iAmProposer: false
-      expect(spellYaml).toContain('i_am_proposer: true');
-      expect(spellYaml).toContain('i_am_proposer: false');
     });
   });
 
@@ -233,14 +232,13 @@ describe('Atomic AcceptProposal Use Case', () => {
 
       expect(result.success).toBe(true);
       expect(result.data?.updatedBadge.active_transactions).toHaveLength(1);
-      expect(result.data?.activeTransaction.iAmProposer).toBe(false);
     });
 
     it('should set correct counterparty in active transaction', async () => {
       const result = await acceptProposal(input, ctx);
 
       expect(result.success).toBe(true);
-      expect(result.data?.activeTransaction.counterpartyBadgeId).toBe(
+      expect(result.data?.activeTransaction.counterparty_badge_id).toBe(
         TEST_BADGE_IDS.proposer
       );
     });
@@ -250,9 +248,9 @@ describe('Atomic AcceptProposal Use Case', () => {
 
       expect(result.success).toBe(true);
       const tx = result.data?.activeTransaction;
-      expect(tx?.startedAt).toBe(TEST_CURRENT_BLOCK);
-      expect(tx?.windowEndsAt).toBe(TEST_CURRENT_BLOCK + input.proposal.windowBlocks);
-      expect(tx?.reportDeadline).toBe(
+      expect(tx?.started_at).toBe(TEST_CURRENT_BLOCK);
+      expect(tx?.window_ends_at).toBe(TEST_CURRENT_BLOCK + input.proposal.windowBlocks);
+      expect(tx?.report_deadline).toBe(
         TEST_CURRENT_BLOCK + input.proposal.windowBlocks + input.proposal.reportWindowBlocks
       );
     });

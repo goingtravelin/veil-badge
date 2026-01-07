@@ -8,6 +8,7 @@ use veil::*;
 
 fn make_test_badge() -> VeilBadge {
     VeilBadge {
+        schema_version: SCHEMA_VERSION,
         id: B32::from([1u8; 32]),
         created_at: 0,
         pubkey: [2u8; 33],

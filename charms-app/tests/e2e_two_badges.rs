@@ -38,6 +38,7 @@ fn mint_badge(genesis_byte: u8, pubkey: PubKey, current_block: u64) -> VeilBadge
     let id = compute_badge_id(&genesis_utxo);
     
     VeilBadge {
+        schema_version: veil::SCHEMA_VERSION,
         id,
         created_at: current_block,
         pubkey,

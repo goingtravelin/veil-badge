@@ -29,6 +29,9 @@ import {
 
 const USE_MOCK_PROVER = import.meta.env.VITE_USE_MOCK_PROVER === 'true';
 
+// Key for storing pending proposal in localStorage
+const PENDING_PROPOSAL_KEY = 'veil_pending_proposal';
+
 type View = 'dashboard' | 'transactions' | 'vouch' | 'network' | 'settings';
 
 const NAV_ITEMS: { id: View; icon: React.FC<{ className?: string }>; label: string }[] = [
@@ -39,14 +42,43 @@ const NAV_ITEMS: { id: View; icon: React.FC<{ className?: string }>; label: stri
   { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
+// Store proposal from URL in localStorage so it survives login flow
+function storeProposalFromUrl(): boolean {
+  const search = window.location.search;
+  if (search.includes('proposal=')) {
+    const params = new URLSearchParams(search);
+    const proposal = params.get('proposal');
+    if (proposal) {
+      logger.info('[App] Storing proposal from URL for after login');
+      localStorage.setItem(PENDING_PROPOSAL_KEY, proposal);
+      return true;
+    }
+  }
+  return false;
+}
+
+// Check if there's a pending proposal (from URL or localStorage)
+function hasPendingProposal(): boolean {
+  const search = window.location.search;
+  if (search.includes('proposal=')) return true;
+  const pending = localStorage.getItem(PENDING_PROPOSAL_KEY);
+  logger.debug('[App] hasPendingProposal: URL has proposal?', search.includes('proposal='), 'localStorage?', pending !== null);
+  return pending !== null;
+}
+
 // Check for proposal in URL on page load
 function getInitialView(): View {
   const search = window.location.search;
+  const pendingProposal = localStorage.getItem(PENDING_PROPOSAL_KEY);
   
-  // Check if URL contains proposal param
-  if (search.includes('proposal=')) {
+  // Check if URL contains proposal param or localStorage has pending proposal
+  if (search.includes('proposal=') || pendingProposal) {
+    // Store the proposal from URL if present
+    storeProposalFromUrl();
+    logger.info('[App] getInitialView: Found proposal, returning transactions view');
     return 'transactions';
   }
+  logger.info('[App] getInitialView: No proposal found, returning dashboard');
   return 'dashboard';
 }
 
@@ -106,11 +138,21 @@ function App() {
     }
   }, [wallet.connected, refreshBadges]);
 
+  // Don't redirect away from transactions if there's a proposal deep link or pending proposal
+  // The badge discovery takes time, and we don't want to lose the deep link
   useEffect(() => {
-    if (wallet.connected && !hasBadge && view !== 'dashboard') {
+    const hasProposalLink = window.location.search.includes('proposal=');
+    const hasPending = localStorage.getItem(PENDING_PROPOSAL_KEY) !== null;
+    // Don't redirect if:
+    // - We're on dashboard already
+    // - There's a proposal link in URL
+    // - There's a pending proposal in localStorage
+    // - We're still loading (walletLoading is true)
+    if (wallet.connected && !hasBadge && view !== 'dashboard' && !hasProposalLink && !hasPending && !walletLoading) {
+      logger.info('[App] No badge found and no pending proposal, redirecting to dashboard');
       setView('dashboard');
     }
-  }, [wallet.connected, hasBadge, view]);
+  }, [wallet.connected, hasBadge, view, walletLoading]);
 
   // Handlers
   const handleConnect = useCallback(async () => {
@@ -125,6 +167,9 @@ function App() {
 
   // Not connected - show login or settings
   if (!wallet.connected) {
+    // Store proposal from URL before showing login
+    const proposalPending = storeProposalFromUrl() || hasPendingProposal();
+    
     // Allow settings view for seed phrase setup before connecting
     if (view === 'settings') {
       return (
@@ -154,6 +199,7 @@ function App() {
         wasmReady={USE_MOCK_PROVER ? true : wasmReady}
         wasmError={USE_MOCK_PROVER ? null : wasmError}
         walletError={walletError}
+        pendingProposal={proposalPending}
       />
     );
   }

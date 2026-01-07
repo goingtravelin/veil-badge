@@ -55,6 +55,10 @@ pub enum Action {
         outcome: ReportedOutcome,
         current_block: u64,
     },
+    MigrateOut,
+    MigrateIn {
+        from_vk: B32,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

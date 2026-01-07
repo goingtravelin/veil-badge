@@ -16,10 +16,49 @@ import { Network } from '../types';
 import { PROVER_ENDPOINTS, DEFAULT_PROVER_CONFIG, PROVER_FALLBACKS, sleep } from '../utils/prover';
 import type { ProverConfig } from '../utils/prover';
 import * as yaml from 'js-yaml';
-import { getVeilAppBinaries } from '../utils/appBinary';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('ProverService');
+
+/**
+ * Normalize spell JSON to ensure all numeric fields are proper numbers.
+ * This fixes issues where BigInt values might have been serialized as strings
+ * or YAML parsing might have produced unexpected types.
+ * 
+ * Specifically targets volume_sum_squares which is u128 in Rust and must be
+ * a number (not string) in the JSON sent to the prover.
+ */
+function normalizeSpellJson(spell: unknown): unknown {
+  if (spell === null || spell === undefined) return spell;
+  
+  if (Array.isArray(spell)) {
+    return spell.map(normalizeSpellJson);
+  }
+  
+  if (typeof spell === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(spell as Record<string, unknown>)) {
+      // volume_sum_squares must be a number for Rust u128 deserialization
+      if (key === 'volume_sum_squares' && typeof value === 'string') {
+        // Parse as number - for u128 values, JavaScript can handle up to 2^53-1 safely
+        // For larger values, this would lose precision but 0 and small values are fine
+        const num = Number(value);
+        if (!Number.isNaN(num)) {
+          logger.debug(`[normalizeSpell] Converting volume_sum_squares from string "${value}" to number ${num}`);
+          result[key] = num;
+        } else {
+          logger.warn(`[normalizeSpell] Could not convert volume_sum_squares "${value}" to number`);
+          result[key] = value;
+        }
+      } else {
+        result[key] = normalizeSpellJson(value);
+      }
+    }
+    return result;
+  }
+  
+  return spell;
+}
 
 export interface ValidationResult {
   valid: boolean;
@@ -104,28 +143,37 @@ export class RemoteProverService implements IProverPort {
 
         let response: Response;
         try {
-          // Parse YAML string to JSON object
-          const spellJson = yaml.load(params.spellYaml);
+          // Parse YAML string to JSON object and normalize numeric fields
+          const rawSpellJson = yaml.load(params.spellYaml);
+          const spellJson = normalizeSpellJson(rawSpellJson);
 
           let binaries: Record<string, string>;
           if (this.config.mock) {
             binaries = { '0000000000000000000000000000000000000000000000000000000000000000': '' };
           } else {
-            onProgress?.('Loading app binary...');
+            onProgress?.('Loading app binaries...');
 
-            const appSpec = (spellJson as any)?.apps?.$00;
-
-            if (!appSpec || typeof appSpec !== 'string') {
-              throw new Error('Invalid spell: missing or invalid app specification in apps.$00');
+            // Extract all unique VKs from all apps in the spell
+            const apps = (spellJson as any)?.apps;
+            if (!apps || typeof apps !== 'object') {
+              throw new Error('Invalid spell: missing apps section');
             }
 
-            const parts = appSpec.split('/');
-            if (parts.length !== 3) {
-              throw new Error(`Invalid app spec format: ${appSpec}. Expected "n/appId/vk"`);
+            const vks = new Set<string>();
+            for (const [key, appSpec] of Object.entries(apps)) {
+              if (typeof appSpec !== 'string') {
+                throw new Error(`Invalid app spec for ${key}: expected string`);
+              }
+              const parts = appSpec.split('/');
+              if (parts.length !== 3) {
+                throw new Error(`Invalid app spec format for ${key}: ${appSpec}. Expected "n/appId/vk"`);
+              }
+              vks.add(parts[2]);
             }
-            const vk = parts[2];
 
-            binaries = await getVeilAppBinaries(vk);
+            // Load binaries for all VKs
+            const { getBinariesForMultipleVks } = await import('../utils/appBinary');
+            binaries = await getBinariesForMultipleVks([...vks]);
           }
 
           const requestBody: Record<string, any> = {

@@ -10,7 +10,7 @@
 import type { VeilBadge } from '../domain/types';
 import type { Network } from '../application/ports';
 import { createBitcoinService } from './BitcoinService';
-import { hasVeilBadge, extractVeilBadge, findFirstNftAppSpec } from '../utils/charms';
+import { hasVeilBadge, extractVeilBadge, findFirstNftAppSpec, parseAppSpec } from '../utils/charms';
 import { createLogger } from '../utils/logger';
 
 const logger = createLogger('CharmsService');
@@ -19,6 +19,13 @@ export interface CharmsApp {
   tag: 'n' | 't';
   identity: string; // hex-encoded 32 bytes
   vk: string; // hex-encoded 32 bytes
+}
+
+/** Badge with its app specification (includes VK) */
+export interface BadgeWithAppSpec {
+  badge: VeilBadge;
+  appSpec: string; // Full app spec string "n/identity/vk"
+  vk: string; // Just the VK for convenience
 }
 
 export interface ParsedSpell {
@@ -245,12 +252,13 @@ export class WasmCharmsService implements ICharmsService {
   /**
    * Scan a UTXO for ANY NFT badge (regardless of VK).
    * Use this when fetching a counterparty's badge that may have been minted with a different VK.
+   * Returns badge WITH its app spec so caller knows which VK the badge uses.
    */
   async scanUtxoForAnyBadge(
     txid: string,
     vout: number,
     network: Network
-  ): Promise<VeilBadge | null> {
+  ): Promise<BadgeWithAppSpec | null> {
     try {
       const bitcoinService = createBitcoinService('mempool');
       const txHex = await bitcoinService.fetchTransaction(txid, network);
@@ -274,10 +282,26 @@ export class WasmCharmsService implements ICharmsService {
       
       logger.debug(`[scanUtxoAny] Found NFT app: ${nftAppSpec.slice(0, 20)}...`);
 
+      // Parse the app spec to extract VK
+      const parsedApp = parseAppSpec(nftAppSpec);
+      if (!parsedApp) {
+        logger.debug(`[scanUtxoAny] Failed to parse app spec`);
+        return null;
+      }
+
       // Extract badge using the found app spec
       const badge = extractVeilBadge(spell, nftAppSpec, vout);
-      logger.debug(`[scanUtxoAny] extractVeilBadge returned:`, badge);
-      return badge;
+      if (!badge) {
+        logger.debug(`[scanUtxoAny] extractVeilBadge returned null`);
+        return null;
+      }
+      
+      logger.debug(`[scanUtxoAny] Badge extracted with VK: ${parsedApp.vk.slice(0, 16)}...`);
+      return {
+        badge,
+        appSpec: nftAppSpec,
+        vk: parsedApp.vk,
+      };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       logger.warn('Error scanning UTXO (any badge)', txid.slice(0, 8), ':', errorMsg.slice(0, 100));
@@ -290,10 +314,10 @@ export class WasmCharmsService implements ICharmsService {
     veilAppId: string,
     network: Network,
     onProgress?: (current: number, total: number) => void
-  ): Promise<Array<{ txid: string; vout: number; badge: VeilBadge }>> {
+  ): Promise<Array<{ txid: string; vout: number; badge: VeilBadge; vk?: string }>> {
     logger.debug(`[discoverBadges] Starting discovery with ${utxos.length} UTXOs, veilAppId=${veilAppId}, network=${network}`);
     
-    const results: Array<{ txid: string; vout: number; badge: VeilBadge }> = [];
+    const results: Array<{ txid: string; vout: number; badge: VeilBadge; vk?: string }> = [];
 
     const BATCH_SIZE = 10;
 
@@ -302,16 +326,33 @@ export class WasmCharmsService implements ICharmsService {
     for (let i = 0; i < utxos.length; i += BATCH_SIZE) {
       const batch = utxos.slice(i, i + BATCH_SIZE);
 
-      // Process batch in parallel
+      // Process batch in parallel - use scanUtxoForAnyBadge to get VK
       const batchResults = await Promise.all(
         batch.map(async (utxo) => {
-          const badge = await this.scanUtxoForBadge(utxo.txid, utxo.vout, veilAppId, network);
-          return badge ? { ...utxo, badge } : null;
+          try {
+            // Try to get badge with VK using scanUtxoForAnyBadge
+            const result = await this.scanUtxoForAnyBadge(utxo.txid, utxo.vout, network);
+            if (result) {
+              logger.debug(`[discoverBadges] Found badge with VK in ${utxo.txid.slice(0,8)}:${utxo.vout}`);
+              return { ...utxo, badge: result.badge, vk: result.vk };
+            }
+            // Fall back to scanUtxoForBadge (without VK) if needed
+            logger.debug(`[discoverBadges] scanUtxoForAnyBadge returned null for ${utxo.txid.slice(0,8)}:${utxo.vout}, trying fallback`);
+            const badge = await this.scanUtxoForBadge(utxo.txid, utxo.vout, veilAppId, network);
+            if (badge) {
+              logger.debug(`[discoverBadges] Fallback found badge (without VK) in ${utxo.txid.slice(0,8)}:${utxo.vout}`);
+              return { ...utxo, badge };
+            }
+            return null;
+          } catch (err) {
+            logger.warn(`[discoverBadges] Error scanning ${utxo.txid.slice(0,8)}:${utxo.vout}:`, err);
+            return null;
+          }
         })
       );
 
       // Add successful results
-      results.push(...batchResults.filter((r): r is { txid: string; vout: number; badge: VeilBadge } => r !== null));
+      results.push(...batchResults.filter((r): r is { txid: string; vout: number; badge: VeilBadge; vk?: string } => r !== null));
 
       // Report progress
       if (onProgress) {

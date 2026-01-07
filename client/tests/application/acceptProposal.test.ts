@@ -158,18 +158,6 @@ describe('Atomic AcceptProposal Use Case', () => {
       expect(spellYaml).toContain('$01:');
       expect(spellYaml).toContain('AcceptProposal:');
     });
-
-    it('should set correct iAmProposer flags in active transactions', async () => {
-      await acceptProposal(input, ctx);
-
-      const proveCall = vi.mocked(ctx.prover.prove).mock.calls[0][0];
-      const spellYaml = proveCall.spellYaml;
-
-      // Proposer badge should have iAmProposer: true
-      // Acceptor badge should have iAmProposer: false
-      expect(spellYaml).toContain('i_am_proposer: true');
-      expect(spellYaml).toContain('i_am_proposer: false');
-    });
   });
 
   describe('UTXO Selection', () => {
@@ -244,7 +232,6 @@ describe('Atomic AcceptProposal Use Case', () => {
 
       expect(result.success).toBe(true);
       expect(result.data?.updatedBadge.active_transactions).toHaveLength(1);
-      expect(result.data?.activeTransaction.i_am_proposer).toBe(false);
     });
 
     it('should set correct counterparty in active transaction', async () => {

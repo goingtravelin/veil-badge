@@ -93,12 +93,12 @@ export function createTestBadge(overrides: Partial<VeilBadge> = {}): VeilBadge {
     active_transactions: [],
     reporting_transactions: [],
     outcomes: {
-      total_resolved: 0,
-      positive_count: 0,
-      negative_count: 0,
-      negative_volume: 0,
-      positive_volume: 0,
-      pending_reports: 0,
+      mutual_positive: 0,
+      mutual_negative: 0,
+      contested_i_positive: 0,
+      contested_i_negative: 0,
+      timeout: 0,
+      mutual_timeout: 0,
     },
     last_nonce: padHex('nonce_'),
     last_update: 117190,
@@ -155,7 +155,6 @@ export function createActiveTransaction(
     started_at: currentBlock,
     window_ends_at: windowEndsAt,
     report_deadline: reportDeadline,
-    i_am_proposer: iAmProposer,
   };
 }
 

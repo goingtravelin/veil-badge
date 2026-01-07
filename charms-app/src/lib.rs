@@ -32,9 +32,20 @@ use charms_data::{Transaction, App, Data};
 
 #[no_mangle]
 pub fn app_contract(app: &App, tx: &Transaction, x: &Data, w: &Data) -> bool {
+    eprintln!("DEBUG: app_contract called");
+    eprintln!("DEBUG: app = {:?}", app);
+    eprintln!("DEBUG: tx.ins.len() = {}", tx.ins.len());
+    eprintln!("DEBUG: tx.outs.len() = {}", tx.outs.len());
+    
     let action: Action = match x.value() {
-        Ok(a) => a,
-        Err(_) => return false,
+        Ok(a) => {
+            eprintln!("DEBUG: action = {:?}", a);
+            a
+        },
+        Err(e) => {
+            eprintln!("DEBUG: failed to deserialize action: {:?}", e);
+            return false;
+        }
     };
 
     match action {
@@ -43,7 +54,10 @@ pub fn app_contract(app: &App, tx: &Transaction, x: &Data, w: &Data) -> bool {
         }
 
         Action::Transfer => {
-            handlers::handle_transfer(app, tx)
+            eprintln!("DEBUG: handling Transfer");
+            let result = handlers::handle_transfer(app, tx);
+            eprintln!("DEBUG: handle_transfer returned {}", result);
+            result
         }
 
         Action::Record { outcome, value, current_block } => {

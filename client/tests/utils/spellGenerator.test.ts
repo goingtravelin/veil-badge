@@ -181,14 +181,6 @@ describe('generateAcceptProposalSpell', () => {
       // New badges should have active_transactions
       expect(spell).toContain('active_transactions:');
     });
-
-    it('should serialize active transactions with iAmProposer flags', () => {
-      const spell = generateAcceptProposalSpell(params);
-      
-      // Should have both true and false iAmProposer
-      expect(spell).toContain('i_am_proposer: true');
-      expect(spell).toContain('i_am_proposer: false');
-    });
   });
 
   describe('Public Args', () => {
@@ -260,5 +252,152 @@ describe('generateReportOutcomeSpell', () => {
     expect(spell).toContain('version: 8');
     expect(spell).toContain('ReportOutcome:');
     expect(spell).toContain('outcome: Positive');
+  });
+});
+
+// ============================================================================
+// Spell Validation Tests
+// These tests ensure no undefined/NaN values slip into generated spells
+// ============================================================================
+
+describe('Spell Validation (No Undefined Values)', () => {
+  let params: AcceptProposalSpellParams;
+
+  beforeEach(() => {
+    const proposerBadge = createProposerBadge();
+    const acceptorBadge = createTestBadge();
+    const proposal = createTestProposal();
+
+    const proposerActive = createActiveTransaction(proposal, true, TEST_CURRENT_BLOCK);
+    const acceptorActive = createActiveTransaction(proposal, false, TEST_CURRENT_BLOCK);
+
+    const proposerUpdated = {
+      ...proposerBadge,
+      active_transactions: [...proposerBadge.active_transactions, proposerActive],
+      last_update: TEST_CURRENT_BLOCK,
+    };
+
+    const acceptorUpdated = {
+      ...acceptorBadge,
+      active_transactions: [...acceptorBadge.active_transactions, acceptorActive],
+      last_update: TEST_CURRENT_BLOCK,
+    };
+
+    params = {
+      acceptorBadgeUtxo: TEST_UTXOS.acceptorBadge,
+      acceptorOldBadge: acceptorBadge,
+      acceptorNewBadge: acceptorUpdated,
+      acceptorAddress: TEST_ADDRESSES.acceptor,
+      proposerBadgeUtxo: TEST_UTXOS.proposerBadge,
+      proposerOldBadge: proposerBadge,
+      proposerNewBadge: proposerUpdated,
+      proposerAddress: TEST_ADDRESSES.proposer,
+      proposerVk: VEIL_APP_VK,
+      proposalId: proposal.id,
+      value: proposal.value,
+      category: proposal.category,
+      windowBlocks: proposal.windowBlocks,
+      reportWindowBlocks: proposal.reportWindowBlocks,
+      currentBlock: TEST_CURRENT_BLOCK,
+    };
+  });
+
+  it('should NEVER contain "undefined" string in generated spell', () => {
+    const spell = generateAcceptProposalSpell(params);
+    expect(spell).not.toContain('undefined');
+    expect(spell).not.toContain('null');
+    expect(spell).not.toContain('NaN');
+  });
+
+  it('should include schema_version in badge state', () => {
+    const spell = generateAcceptProposalSpell(params);
+    expect(spell).toContain('schema_version: 1');
+  });
+
+  it('should include proposer_badge_id in public_args for both apps', () => {
+    const spell = generateAcceptProposalSpell(params);
+    
+    // Count occurrences of proposer_badge_id - should be exactly 2 (once per app)
+    const matches = spell.match(/proposer_badge_id:/g);
+    expect(matches).toHaveLength(2);
+    
+    // Both should reference the proposer's badge ID
+    expect(spell).toContain(`proposer_badge_id: "${params.proposerOldBadge.id}"`);
+  });
+
+  it('should serialize active_transactions with correct snake_case field names', () => {
+    const spell = generateAcceptProposalSpell(params);
+    
+    // Must use snake_case
+    expect(spell).toContain('counterparty_badge_id:');
+    expect(spell).toContain('started_at:');
+    expect(spell).toContain('window_ends_at:');
+    expect(spell).toContain('report_deadline:');
+    
+    // Must NOT use camelCase
+    expect(spell).not.toContain('counterpartyBadgeId:');
+    expect(spell).not.toContain('startedAt:');
+    expect(spell).not.toContain('windowEndsAt:');
+    expect(spell).not.toContain('reportDeadline:');
+  });
+
+  it('should serialize outcomes with correct snake_case field names', () => {
+    const spell = generateAcceptProposalSpell(params);
+    
+    // Must use snake_case
+    expect(spell).toContain('mutual_positive:');
+    expect(spell).toContain('mutual_negative:');
+    expect(spell).toContain('contested_i_positive:');
+    expect(spell).toContain('contested_i_negative:');
+    expect(spell).toContain('mutual_timeout:');
+    
+    // Must NOT use camelCase
+    expect(spell).not.toContain('mutualPositive:');
+    expect(spell).not.toContain('mutualNegative:');
+    expect(spell).not.toContain('contestedIPositive:');
+    expect(spell).not.toContain('contestedINegative:');
+    expect(spell).not.toContain('mutualTimeout:');
+  });
+
+  it('should handle badges with existing active_transactions', () => {
+    const existingTx = createActiveTransaction(
+      { ...createTestProposal(), id: 'existing'.padEnd(64, '0') },
+      true,
+      TEST_CURRENT_BLOCK - 100
+    );
+    
+    params.proposerOldBadge = {
+      ...params.proposerOldBadge,
+      active_transactions: [existingTx],
+    };
+    
+    const spell = generateAcceptProposalSpell(params);
+    expect(spell).not.toContain('undefined');
+  });
+
+  it('should handle badges with non-zero outcomes', () => {
+    params.proposerOldBadge = {
+      ...params.proposerOldBadge,
+      outcomes: {
+        mutual_positive: 5,
+        mutual_negative: 1,
+        contested_i_positive: 2,
+        contested_i_negative: 0,
+        timeout: 1,
+        mutual_timeout: 0,
+      },
+    };
+    
+    const spell = generateAcceptProposalSpell(params);
+    expect(spell).not.toContain('undefined');
+    expect(spell).toContain('mutual_positive: 5');
+    expect(spell).toContain('mutual_negative: 1');
+  });
+
+  it('should NOT wrap volume_sum_squares in quotes (WASM expects u128)', () => {
+    const spell = generateAcceptProposalSpell(params);
+    // volume_sum_squares is u128 in Rust - must NOT be quoted
+    expect(spell).toMatch(/volume_sum_squares: \d+/);
+    expect(spell).not.toMatch(/volume_sum_squares: "\d+"/);
   });
 });
